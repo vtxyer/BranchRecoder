@@ -407,13 +407,16 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
 
     if ( !core2_vpmu_msr_common_check(msr, &type, &index) )
     {
+	
         /* Special handling for BTS */
         if ( msr == MSR_IA32_DEBUGCTLMSR )
         {
             uint64_t supported = IA32_DEBUGCTLMSR_TR | IA32_DEBUGCTLMSR_BTS |
                                  IA32_DEBUGCTLMSR_BTINT;
 
+			printk("<VT> init DEBUGCTLMSR %lx\n", msr_content);
             if ( cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) ){
+				printk("<VT> into cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) vpmu_core2.c:417\n");
                 supported |= IA32_DEBUGCTLMSR_BTS_OFF_OS |
                              IA32_DEBUGCTLMSR_BTS_OFF_USR;
 			}
@@ -430,6 +433,8 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
     }
 
     core2_vpmu_cxt = vpmu->context;
+
+//	printk("<VT> msr %x\n", msr);
     switch ( msr )
     {
     case MSR_CORE_PERF_GLOBAL_OVF_CTRL:
@@ -441,13 +446,16 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
         hvm_inject_hw_exception(TRAP_gp_fault, 0);
         return 1;
     case MSR_IA32_PEBS_ENABLE:
+		printk("<VT> try to enable pebs\n");
         if ( msr_content & 1 )
             gdprintk(XENLOG_WARNING, "Guest is trying to enable PEBS, "
                      "which is not supported.\n");
         return 1;
     case MSR_IA32_DS_AREA:
+		printk("<VT> msrwrite DS_AREA\n");
         if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_DS) )
         {
+			printk("<VT> into msrwrite DS_AREA\n");
             if ( !is_canonical_address(msr_content) )
             {
                 gdprintk(XENLOG_WARNING,
@@ -494,6 +502,7 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
         }
         break;
     default:
+//		printk("<VT> into default\n");
         tmp = msr - MSR_P6_EVNTSEL0;
         vmx_read_guest_msr(MSR_CORE_PERF_GLOBAL_CTRL, &global_ctrl);
         if ( tmp >= 0 && tmp < core2_get_pmc_count() )
@@ -506,8 +515,10 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
     for ( i = 0; i < core2_get_pmc_count(); i++ )
         pmu_enable |= core2_vpmu_cxt->pmu_enable->arch_pmc_enable[i];
     pmu_enable |= core2_vpmu_cxt->pmu_enable->ds_area_enable;
-    if ( pmu_enable )
+    if ( pmu_enable ){
+//		printk("<VT> vpmu is running\n");
         vpmu_set(vpmu, VPMU_RUNNING);
+	}
     else
         vpmu_reset(vpmu, VPMU_RUNNING);
 
@@ -544,6 +555,7 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
                 inject_gp = 1;
             break;
         }
+
         if (inject_gp)
             hvm_inject_hw_exception(TRAP_gp_fault, 0);
         else

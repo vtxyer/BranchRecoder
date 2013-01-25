@@ -39,6 +39,9 @@
 #include <asm/shadow.h>
 #include <asm/tboot.h>
 
+#include <asm/hvm/vpmu.h>
+#include <asm/hvm/vmx/vpmu_core2.h>
+
 static bool_t __read_mostly opt_vpid_enabled = 1;
 boolean_param("vpid", opt_vpid_enabled);
 
@@ -1161,10 +1164,104 @@ static void vmx_dump_sel2(char *name, uint32_t lim)
            name, limit, base);
 }
 
+
+
+
+/*<VT> add*/
+int alloc_bts_buffer(struct vcpu *v, struct vpmu_struct *vpmu)
+{
+	struct debug_store *ds;
+	int max, thresh;
+	void *buffer;
+	unsigned long buffer_size;
+	struct page_info *pg;
+
+	ds = &(vpmu->ds);
+	buffer_size = 4096 << (vpmu->bts_size_order);
+
+	/*!!!get pg from domain page list*/
+	pg = v->domain->arch.paging.alloc_page(v->domain);
+
+	//buffer use logical address?
+	buffer = page_to_virt(pg);
+
+	if (unlikely(!buffer))
+		return -1;
+
+	max = buffer_size / BTS_RECORD_SIZE;
+	thresh = max + 24;
+
+	ds->bts_buffer_base = (u64)(unsigned long)buffer;
+	ds->bts_index = ds->bts_buffer_base;
+	ds->bts_absolute_maximum = ds->bts_buffer_base +
+		max * BTS_RECORD_SIZE;
+	ds->bts_interrupt_threshold = ds->bts_absolute_maximum -
+		thresh * BTS_RECORD_SIZE;
+
+	return 0;
+}
+
+
+
+/*<VT> add 
+ *setup varaible in debug structure
+ * */
+int init_debug_store(struct vcpu *v)
+{
+	struct vpmu_struct *vpmu;
+	int ret;
+	vpmu = vcpu_vpmu(v);
+	if(vpmu->bts_enable == 0){
+		memset(&(vpmu->ds), 0, sizeof(struct debug_store));
+		ret = alloc_bts_buffer(v, vpmu);
+		if(ret == -1){
+			printk("<VT> alloc bts error\n");
+			return -1;
+		}
+		vpmu->bts_enable = 1;
+		printk("<VT> debug_store init ok\n");
+		return 0;
+	}
+	return -2;
+}
+int write_bts_msr(struct vcpu *v)
+{
+	struct vpmu_struct *vpmu;
+	//unsigned int msr;
+	u64	msr_content;
+	int ret;
+
+	vpmu = vcpu_vpmu(v);
+
+	/*write MSR_IA32_DS_AREA*/
+	msr_content = (u64)&(vpmu->ds);
+	if(is_canonical_address(msr_content))
+		printk("<VT> MSR_IA32_DS_AREA msr_content is canonical\n");
+	ret = vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DS_AREA, msr_content);	
+
+	/*write MSR_IA32_DEBUGCTLMSR*/
+	vpmu->arch_vpmu_ops->do_rdmsr(MSR_IA32_DEBUGCTLMSR, &msr_content);
+	printk("<VT> original msr_content val:%lx\n", msr_content);
+	msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS; 
+	printk("<VT> revised msr_content val:%lx\n", msr_content);
+	vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DEBUGCTLMSR, msr_content);
+	vpmu->arch_vpmu_ops->do_rdmsr(MSR_IA32_DEBUGCTLMSR, &msr_content);
+	printk("<VT> msr_content fromm MSR_IA32_DEBUGCTL %lx\n", msr_content);
+
+
+	printk("<VT> write_bts_msr ok\n");
+	return 1;
+}
+
+
+
+
+
 void vmcs_dump_vcpu(struct vcpu *v)
 {
     struct cpu_user_regs *regs = &v->arch.user_regs;
     unsigned long long x;
+	int ret;
 
     if ( v == current )
         regs = guest_cpu_user_regs();
@@ -1285,6 +1382,24 @@ void vmcs_dump_vcpu(struct vcpu *v)
            (uint32_t)vmr(EPT_POINTER_HIGH), (uint32_t)vmr(EPT_POINTER));
     printk("Virtual processor ID = 0x%04x\n",
            (uint32_t)vmr(VIRTUAL_PROCESSOR_ID));
+
+
+
+	/*<VT> add*/
+	ret = init_debug_store(v);
+	if(ret < 0)
+		printk("<VT> init error\n");
+	else{
+		ret = write_bts_msr(v);
+		if(ret < 0){
+			printk("<VT> write bfs msr error\n");
+		}
+	}
+	
+
+	
+
+
 
     vmx_vmcs_exit(v);
 }

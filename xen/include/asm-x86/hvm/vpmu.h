@@ -43,6 +43,39 @@
 #define MSR_TYPE_ARCH_CTRL          4
 
 
+/*<VT> add*
+ *debug store structure
+ */
+/* DEBUGCTLMSR bits (others vary by model): */
+#define DEBUGCTLMSR_LBR			(1UL <<  0) /* last branch recording */
+#define DEBUGCTLMSR_BTF			(1UL <<  1) /* single-step on branches */
+#define DEBUGCTLMSR_TR			(1UL <<  6)
+#define DEBUGCTLMSR_BTS			(1UL <<  7)
+#define DEBUGCTLMSR_BTINT		(1UL <<  8)
+#define DEBUGCTLMSR_BTS_OFF_OS		(1UL <<  9)
+#define DEBUGCTLMSR_BTS_OFF_USR		(1UL << 10)
+#define DEBUGCTLMSR_FREEZE_LBRS_ON_PMI	(1UL << 11)
+#define DEBUGCTLMSR_FREEZE_PERFMON_ON_PMI	(1UL << 12)
+#define DEBUGCTLMSR_UNCRE_PMI_EN	(1UL << 13)
+#define DEBUGCTLMSR_FREEZE_WHILE_SMM_EN	(1UL << 14)
+
+
+#define BTS_RECORD_SIZE		24
+#define MAX_PEBS_EVENTS      8
+struct debug_store {
+	u64	bts_buffer_base;
+	u64	bts_index;
+	u64	bts_absolute_maximum;
+	u64	bts_interrupt_threshold;
+	u64	pebs_buffer_base;
+	u64	pebs_index;
+	u64	pebs_absolute_maximum;
+	u64	pebs_interrupt_threshold;
+	u64	pebs_event_reset[MAX_PEBS_EVENTS];
+};
+
+
+
 /* Arch specific operations shared by all vpmus */
 struct arch_vpmu_ops {
     int (*do_wrmsr)(unsigned int msr, uint64_t msr_content);
@@ -63,6 +96,9 @@ struct vpmu_struct {
     u32 flags;
     void *context;
     struct arch_vpmu_ops *arch_vpmu_ops;
+	struct debug_store ds;
+	u32 bts_size_order;
+	u32 bts_enable;
 };
 
 #define VPMU_CONTEXT_ALLOCATED              0x1
