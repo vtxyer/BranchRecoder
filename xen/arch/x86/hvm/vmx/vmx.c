@@ -56,6 +56,11 @@
 #include <asm/apic.h>
 #include <asm/hvm/nestedhvm.h>
 
+
+#include <asm/hvm/vpmu.h>
+#include <asm/hvm/vmx/vpmu_core2.h>
+
+
 enum handler_return { HNDL_done, HNDL_unhandled, HNDL_exception_raised };
 
 static void vmx_ctxt_switch_from(struct vcpu *v);
@@ -1868,12 +1873,15 @@ static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
         break;
     case MSR_IA32_MISC_ENABLE:
         rdmsrl(MSR_IA32_MISC_ENABLE, *msr_content);
+		printk("<VT> go into xen/arch/x86/hvm/vmx/vmx.c  vmx_msr_read_intercept\n");
         /* Debug Trace Store is not supported. */
         *msr_content |= MSR_IA32_MISC_ENABLE_BTS_UNAVAIL |
                        MSR_IA32_MISC_ENABLE_PEBS_UNAVAIL;
         /* Perhaps vpmu will change some bits. */
-        if ( vpmu_do_rdmsr(msr, msr_content) )
+        if ( vpmu_do_rdmsr(msr, msr_content) ){
+			printk("<VT> end of xen/arch/x86/hvm/vmx/vmx.c vmx_msr_read_intercept msr_content:%lx\n", *msr_content);
             goto done;
+		}
         break;
     default:
         if ( vpmu_do_rdmsr(msr, msr_content) )

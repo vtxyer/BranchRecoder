@@ -416,14 +416,16 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
 
 			printk("<VT> init DEBUGCTLMSR %lx\n", msr_content);
             if ( cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) ){
-				printk("<VT> into cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) vpmu_core2.c:417\n");
+				printk("<VT> into cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) remove OS and USR recorder\n");
                 supported |= IA32_DEBUGCTLMSR_BTS_OFF_OS |
                              IA32_DEBUGCTLMSR_BTS_OFF_USR;
 			}
             if ( msr_content & supported )
             {
-                if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_BTS) )
+                if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_BTS) ){
+					printk("<VT> core2_vpmu_do_wrmsr into VPMU_CPU_HAS_BTS\n");
                     return 1;
+				}
                 gdprintk(XENLOG_WARNING, "Debug Store is not supported on this cpu\n");
                 hvm_inject_hw_exception(TRAP_gp_fault, 0);
                 return 0;
@@ -597,8 +599,10 @@ static int core2_vpmu_do_rdmsr(unsigned int msr, uint64_t *msr_content)
         /* Extension for BTS */
         if ( msr == MSR_IA32_MISC_ENABLE )
         {
-            if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_BTS) )
+            if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_BTS) ){
+				printk("<VT>core2_vpmu_do_rdmsr into VPMU_CPU_HAS_BTS\n");
                 *msr_content &= ~MSR_IA32_MISC_ENABLE_BTS_UNAVAIL;
+			}
         }
         else
             return 0;
@@ -635,8 +639,10 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     rdmsrl(MSR_CORE_PERF_GLOBAL_STATUS, msr_content);
     if ( msr_content )
     {
-        if ( is_pmc_quirk )
+        if ( is_pmc_quirk ){
             handle_pmc_quirk(msr_content);
+			printk("<VT>into core2_vpmu_do_interrupt is_pmc_quirk\n");
+		}
         core2_vpmu_cxt->global_ovf_status |= msr_content;
         msr_content = 0xC000000700000000 | ((1 << core2_get_pmc_count()) - 1);
         wrmsrl(MSR_CORE_PERF_GLOBAL_OVF_CTRL, msr_content);
@@ -645,6 +651,7 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     {
         /* No PMC overflow but perhaps a Trace Message interrupt. */
         msr_content = __vmread(GUEST_IA32_DEBUGCTL);
+		printk("<VT> into core2_vpmu_do_interrupt Trace Message interrupt region\n");
         if ( !(msr_content & IA32_DEBUGCTLMSR_TR) )
             return 0;
     }
@@ -663,7 +670,6 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
         v->nmi_pending = 1;
     return 1;
 }
-
 static int core2_vpmu_initialise(struct vcpu *v, unsigned int vpmu_flags)
 {
     struct vpmu_struct *vpmu = vcpu_vpmu(v);

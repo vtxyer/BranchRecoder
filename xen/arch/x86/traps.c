@@ -2536,9 +2536,12 @@ static int emulate_privileged_op(struct cpu_user_regs *regs)
         case MSR_IA32_MISC_ENABLE:
             if ( rdmsr_safe(regs->ecx, val) )
                 goto fail;
+			printk("<VT>into MSR_IA32_MISC_ENABLE\n");
             val = guest_misc_enable(val);
-            if ( msr_content != val )
+            if ( msr_content != val ){
+				printk("<VT>MSR_IA32_MISC_ENABLE invalid\n");
                 goto invalid;
+			}
             break;
         case MSR_IA32_MPERF:
         case MSR_IA32_APERF:
