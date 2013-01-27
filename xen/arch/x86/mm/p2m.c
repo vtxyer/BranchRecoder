@@ -37,6 +37,10 @@
 #include <asm/hvm/nestedhvm.h>
 #include <asm/hvm/svm/amd-iommu-proto.h>
 
+#include <asm/hvm/vpmu.h>
+#include <asm/hvm/vmx/vpmu_core2.h>
+#include <asm/hypercall.h>
+
 #include "mm-locks.h"
 
 /* turn on/off 1GB host page table support for hap, default on */
@@ -1713,3 +1717,6 @@ out_p2m_audit:
  * indent-tabs-mode: nil
  * End:
  */
+
+
+

@@ -95,9 +95,7 @@ do_vt_op(
 	int op, 
 	int domID, 
 	unsigned long arg, 
-	unsigned long *arg_buf1, 
-	unsigned long arg_buf2
-    );
+	unsigned long *arg_buf1); 
 
 
 

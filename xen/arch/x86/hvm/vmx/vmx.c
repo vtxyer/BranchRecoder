@@ -57,8 +57,7 @@
 #include <asm/hvm/nestedhvm.h>
 
 
-#include <asm/hvm/vpmu.h>
-#include <asm/hvm/vmx/vpmu_core2.h>
+
 
 
 enum handler_return { HNDL_done, HNDL_unhandled, HNDL_exception_raised };
@@ -2840,11 +2839,13 @@ void vmx_vmenter_helper(void)
 
 
 
+
 /*<VT> add*/
 int alloc_guest_buffer(struct domain *d, unsigned long size)
 {
 	return 0;
 }
+
 int init_debug_store(struct vcpu *v, unsigned long bts_buffer_size)
 {
 	struct vpmu_struct *vpmu;
@@ -2853,7 +2854,15 @@ int init_debug_store(struct vcpu *v, unsigned long bts_buffer_size)
 	unsigned long buffer_size;
 	struct page_info *pg;*/
 
+	if(v == NULL){
+		printk("<VT> error vcpu in init_debug_store\n");
+		return -2;
+	}
 	vpmu = vcpu_vpmu(v);
+	if(vpmu == NULL){
+		printk("<VT> error vpmu in init_debug_store\n");
+		return -2;
+	}
 
 	if(vpmu->bts_enable == 0){	
 		vpmu->bts_size_order = bts_buffer_size/PAGE_SIZE + 1;
@@ -2887,8 +2896,7 @@ int init_debug_store(struct vcpu *v, unsigned long bts_buffer_size)
 	}
 }
 
-
-int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1, unsigned long arg_buf2)
+int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1)
 {
 	struct domain *d = get_domain_by_id(domID);
 	struct vcpu *v = NULL;
@@ -2896,13 +2904,15 @@ int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1, unsi
 	if(d == NULL){
 		printk("Wrong domain ID\n");
 		return -1;
-	}
+	}	
 
+
+	printk("Into vt_op op:%d domID:%d arg:%lu\n", op, domID, arg);
 	switch(op){
 		case 1:
 			/*Init debug register*/
-			vcpu_vpmu(v)->ds_addr = arg;
 			for_each_vcpu(d, v){
+				vcpu_vpmu(v)->ds_addr = arg;
 				init_debug_store(v, 4096);
 			}
 			break;
@@ -2917,6 +2927,12 @@ int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1, unsi
 			if(vcpu_vpmu(v)->bts_enable == 2){
 				vcpu_vpmu(v)->bts_enable = 3;
 			}
+			break;
+
+
+		default:
+			printk("Error op\n");
+			return -1;
 			break;
 	}
 	return 1;

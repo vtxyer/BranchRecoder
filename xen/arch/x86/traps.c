@@ -3848,7 +3848,6 @@ long set_debugreg(struct vcpu *v, int reg, unsigned long value)
         }
         if ( v == curr )
             write_debugreg(7, value);
-        break;
     default:
         return -EINVAL;
     }
@@ -3891,3 +3890,4 @@ unsigned long do_get_debugreg(int reg)
  * indent-tabs-mode: nil
  * End:
  */
+

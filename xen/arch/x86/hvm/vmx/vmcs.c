@@ -1219,7 +1219,6 @@ void vmx_do_resume(struct vcpu *v)
 
 			/*NOTE: Remember to free debug store*/
 			/**/
-		
 			vcpu_vpmu(v)->bts_enable = 0;
 		}
 	}
