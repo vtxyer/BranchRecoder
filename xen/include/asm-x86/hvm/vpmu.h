@@ -96,7 +96,9 @@ struct vpmu_struct {
     u32 flags;
     void *context;
     struct arch_vpmu_ops *arch_vpmu_ops;
-	struct debug_store ds;
+
+	/*<VT> add*/
+	u64 ds_addr;
 	u32 bts_size_order;
 	u32 bts_enable;
 };

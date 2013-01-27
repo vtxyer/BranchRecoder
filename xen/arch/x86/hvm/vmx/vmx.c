@@ -2841,6 +2841,83 @@ void vmx_vmenter_helper(void)
 
 
 /*<VT> add*/
+int alloc_guest_buffer(struct domain *d, unsigned long size)
+{
+	return 0;
+}
+int init_debug_store(struct vcpu *v, unsigned long bts_buffer_size)
+{
+	struct vpmu_struct *vpmu;
+/*	int ret;
+	int max, thresh;
+	unsigned long buffer_size;
+	struct page_info *pg;*/
+
+	vpmu = vcpu_vpmu(v);
+
+	if(vpmu->bts_enable == 0){	
+		vpmu->bts_size_order = bts_buffer_size/PAGE_SIZE + 1;
+
+		/*NOTE: Remaing to do alloc guest space from hypervisor*/
+		/*ds = alloc_guest_buffer(v->domain, sizeof(struct debug_store));
+		buffer_size = (PAGE_SIZE << (vpmu->bts_size_order));
+		pg = NULL;
+		pg = v->domain->arch.paging.alloc_page(v->domain);
+		if(pg == NULL){
+			printk("<VT> get free page error\n");
+			return -1;
+		}
+		max = buffer_size / BTS_RECORD_SIZE;
+		thresh = max ;
+		ds->bts_buffer_base = (u64)page_to_virt(pg);
+		ds->bts_index = ds->bts_buffer_base;
+		ds->bts_absolute_maximum = ds->bts_buffer_base +
+			max * BTS_RECORD_SIZE;
+		ds->bts_interrupt_threshold = ds->bts_buffer_base + 
+			thresh * BTS_RECORD_SIZE;*/
+
+
+		printk("<VT> debug_store init ok\n");
+		vpmu->bts_enable = 1;
+		return 0;
+	}
+	else{
+		printk("<VT> Already init debug store\n");
+		return -2;
+	}
+}
+
+
 int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1, unsigned long arg_buf2)
 {
+	struct domain *d = get_domain_by_id(domID);
+	struct vcpu *v = NULL;
+
+	if(d == NULL){
+		printk("Wrong domain ID\n");
+		return -1;
+	}
+
+	switch(op){
+		case 1:
+			/*Init debug register*/
+			vcpu_vpmu(v)->ds_addr = arg;
+			for_each_vcpu(d, v){
+				init_debug_store(v, 4096);
+			}
+			break;
+		case 2:
+			/*start BTS tracing*/
+			if(vcpu_vpmu(v)->bts_enable == 1){
+				vcpu_vpmu(v)->bts_enable = 2;
+			}
+			break;
+		case 3:
+			/*stop BTS tracing*/
+			if(vcpu_vpmu(v)->bts_enable == 2){
+				vcpu_vpmu(v)->bts_enable = 3;
+			}
+			break;
+	}
+	return 1;
 }

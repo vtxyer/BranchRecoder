@@ -90,9 +90,14 @@ extern unsigned long
 do_iret(
     void);
 
-extern unsigned long
+extern int
 do_vt_op(
-    void);
+	int op, 
+	int domID, 
+	unsigned long arg, 
+	unsigned long *arg_buf1, 
+	unsigned long arg_buf2
+    );
 
 
 
