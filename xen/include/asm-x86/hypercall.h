@@ -90,6 +90,12 @@ extern unsigned long
 do_iret(
     void);
 
+extern unsigned long
+do_vt_op(
+    void);
+
+
+
 #ifdef __x86_64__
 
 extern long

@@ -1847,6 +1847,7 @@ static int is_last_branch_msr(u32 ecx)
 
 static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
 {
+	struct debug_store *ds;
     HVM_DBG_LOG(DBG_LEVEL_1, "ecx=%x", msr);
 
     switch ( msr )
@@ -1865,6 +1866,7 @@ static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
 #ifdef __i386__
         *msr_content |= (u64)__vmread(GUEST_IA32_DEBUGCTL_HIGH) << 32;
 #endif
+		printk("<VT>  go into xen/arch/x86/hvm/vmx/vmx.c MSR_IA32_DEBUGCTLMSR msr_content:%lx\n", *msr_content);
         break;
     case IA32_FEATURE_CONTROL_MSR:
     case MSR_IA32_VMX_BASIC...MSR_IA32_VMX_TRUE_ENTRY_CTLS:
@@ -1872,14 +1874,29 @@ static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
             goto gp_fault;
         break;
     case MSR_IA32_MISC_ENABLE:
+
+		/*<VT>add to know value in MSR_IA32_DEBUGCTLMSR*/
+//		*msr_content = __vmread(GUEST_IA32_DEBUGCTL);
+//		printk("<VT>Self vmread GUEST_IA32_DEBUGCTL msr_content:%lx\n", *msr_content);
+//		vpmu_do_rdmsr(MSR_IA32_DEBUGCTLMSR, msr_content);
+//		printk("<VT>Self rdmsr MSR_IA32_DEBUGCTLMSR msr_content:%lx\n", *msr_content);
+
+		if( vcpu_vpmu(current)->bts_enable >= 3){
+			vpmu_do_rdmsr(MSR_IA32_DS_AREA, msr_content);
+			ds = (struct debug_store *)(*msr_content);
+			printk("bts_buffer_base %lx bts_index %lx bts_absolute_maximum %lx pebs_buffer_base %lx \n",
+				ds->bts_buffer_base, ds->bts_index, ds->bts_absolute_maximum, ds->pebs_buffer_base
+			);
+		}
+
+
         rdmsrl(MSR_IA32_MISC_ENABLE, *msr_content);
-		printk("<VT> go into xen/arch/x86/hvm/vmx/vmx.c  vmx_msr_read_intercept\n");
         /* Debug Trace Store is not supported. */
         *msr_content |= MSR_IA32_MISC_ENABLE_BTS_UNAVAIL |
                        MSR_IA32_MISC_ENABLE_PEBS_UNAVAIL;
-        /* Perhaps vpmu will change some bits. */
+        /* Perhaps vpmu will change some bits. */		
         if ( vpmu_do_rdmsr(msr, msr_content) ){
-			printk("<VT> end of xen/arch/x86/hvm/vmx/vmx.c vmx_msr_read_intercept msr_content:%lx\n", *msr_content);
+//			printk("<VT> end of xen/arch/x86/hvm/vmx/vmx.c MSR_IA32_MISC_ENABLE msr_content:%lx\n", *msr_content);
             goto done;
 		}
         break;
@@ -2308,6 +2325,7 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
 
     perfc_incra(vmexits, exit_reason);
 
+
     /* Handle the interrupt we missed before allowing any more in. */
     switch ( (uint16_t)exit_reason )
     {
@@ -2341,6 +2359,9 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
 
     if ( unlikely(exit_reason & VMX_EXIT_REASONS_FAILED_VMENTRY) )
         return vmx_failed_vmentry(exit_reason, regs);
+
+
+
 
     if ( v->arch.hvm_vmx.vmx_realmode )
     {
@@ -2390,6 +2411,8 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
     if ( !nestedhvm_vcpu_in_guestmode(v) && 
          exit_reason != EXIT_REASON_TASK_SWITCH )
         vmx_idtv_reinject(idtv_info);
+
+
 
     switch ( exit_reason )
     {
@@ -2596,6 +2619,9 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
         uint64_t msr_content;
         if ( hvm_msr_read_intercept(regs->ecx, &msr_content) == X86EMUL_OKAY )
         {
+			if((regs->ecx) == MSR_SHADOW_GS_BASE){
+				printk("<VT> read MSR_SHADOW_GS_BASE msr_content:%lx\n", msr_content);
+			}
             regs->eax = (uint32_t)msr_content;
             regs->edx = (uint32_t)(msr_content >> 32);
             update_guest_eip(); /* Safe: RDMSR */
@@ -2607,7 +2633,11 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
         uint64_t msr_content;
         msr_content = ((uint64_t)regs->edx << 32) | (uint32_t)regs->eax;
         if ( hvm_msr_write_intercept(regs->ecx, msr_content) == X86EMUL_OKAY )
-            update_guest_eip(); /* Safe: WRMSR */
+            update_guest_eip(); /* Safe: WRMSR */		
+
+		if((regs->ecx) == MSR_SHADOW_GS_BASE){
+			printk("<VT> write MSR_SHADOW_GS_BASE msr_content:%lx\n", msr_content);
+		}
         break;
     }
 
@@ -2807,3 +2837,10 @@ void vmx_vmenter_helper(void)
  * indent-tabs-mode: nil
  * End:
  */
+
+
+
+/*<VT> add*/
+int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1, unsigned long arg_buf2)
+{
+}

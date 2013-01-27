@@ -395,8 +395,7 @@ static int core2_vpmu_msr_common_check(u32 msr_index, int *type, int *index)
     return 1;
 }
 
-static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
-{
+static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
     u64 global_ctrl, non_global_ctrl;
     char pmu_enable = 0;
     int i, tmp;
@@ -416,7 +415,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
 
 			printk("<VT> init DEBUGCTLMSR %lx\n", msr_content);
             if ( cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) ){
-				printk("<VT> into cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) remove OS and USR recorder\n");
                 supported |= IA32_DEBUGCTLMSR_BTS_OFF_OS |
                              IA32_DEBUGCTLMSR_BTS_OFF_USR;
 			}
@@ -436,7 +434,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
 
     core2_vpmu_cxt = vpmu->context;
 
-//	printk("<VT> msr %x\n", msr);
     switch ( msr )
     {
     case MSR_CORE_PERF_GLOBAL_OVF_CTRL:
@@ -454,10 +451,8 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
                      "which is not supported.\n");
         return 1;
     case MSR_IA32_DS_AREA:
-		printk("<VT> msrwrite DS_AREA\n");
         if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_DS) )
         {
-			printk("<VT> into msrwrite DS_AREA\n");
             if ( !is_canonical_address(msr_content) )
             {
                 gdprintk(XENLOG_WARNING,
@@ -466,6 +461,7 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
                 hvm_inject_hw_exception(TRAP_gp_fault, 0);
                 return 1;
             }
+			printk("<VT> core2_vpmu_do_wrmsr into   case MSR_IA32_DS_AREA:\n");
             core2_vpmu_cxt->pmu_enable->ds_area_enable = msr_content ? 1 : 0;
             break;
         }
@@ -526,10 +522,14 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
 
     /* Setup LVTPC in local apic */
     if ( vpmu_is_set(vpmu, VPMU_RUNNING) &&
-         is_vlapic_lvtpc_enabled(vcpu_vlapic(v)) )
+         is_vlapic_lvtpc_enabled(vcpu_vlapic(v)) ){
+		printk("<VT>inert vlapic\n");
         apic_write_around(APIC_LVTPC, PMU_APIC_VECTOR);
-    else
+	}
+    else{
+		printk("<VT>Not inert vlapic\n");
         apic_write_around(APIC_LVTPC, PMU_APIC_VECTOR | APIC_LVT_MASKED);
+	}
 
     core2_vpmu_save_msr_context(v, type, index, msr_content);
     if ( type != MSR_TYPE_GLOBAL )
@@ -560,11 +560,15 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content)
 
         if (inject_gp)
             hvm_inject_hw_exception(TRAP_gp_fault, 0);
-        else
+        else{
+			printk("<VT> into !MSR_TYPE_GLOBAL wrmsrl\n");
             wrmsrl(msr, msr_content);
+		}
     }
-    else
+    else{
+		printk("<VT> type=MSR_TYPE_GLOBAL vmx_write_guest_msr()\n");
         vmx_write_guest_msr(MSR_CORE_PERF_GLOBAL_CTRL, msr_content);
+	}
 
     return 1;
 }

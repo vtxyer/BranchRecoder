@@ -1088,7 +1088,7 @@ int alloc_bts_buffer(struct vcpu *v, struct vpmu_struct *vpmu)
 {
 	struct debug_store *ds;
 	int max, thresh;
-	void *buffer;
+//	void *buffer;
 	unsigned long buffer_size;
 	struct page_info *pg;
 
@@ -1098,27 +1098,31 @@ int alloc_bts_buffer(struct vcpu *v, struct vpmu_struct *vpmu)
 	/*!!!get pg from domain page list*/
 	pg = NULL;
 	pg = v->domain->arch.paging.alloc_page(v->domain);
-	if(pg == NULL)
+	if(pg == NULL){
 		printk("<VT> get free page error\n");
+		return -1;
+	}
 
 	//buffer use logical address?
-	buffer = page_to_virt(pg);
+//	buffer = page_to_virt(pg);
 
-	if (unlikely(!buffer))
-		return -1;
+//	if (unlikely(!buffer))
+//		return -1;
 
 	max = buffer_size / BTS_RECORD_SIZE;
 	thresh = max ;
 
-	ds->bts_buffer_base = (u64)(unsigned long)buffer;
+	ds->bts_buffer_base = (u64)page_to_virt(pg);
+	//just for test
+
 	ds->bts_index = ds->bts_buffer_base;
 	ds->bts_absolute_maximum = ds->bts_buffer_base +
 		max * BTS_RECORD_SIZE;
 	ds->bts_interrupt_threshold = ds->bts_buffer_base + 
 		thresh * BTS_RECORD_SIZE;
 
-	printk("bts_buffer_base %lx bts_index %lx bts_absolute_maximum %lx bts_interrupt_threshold %lx\n",
-		ds->bts_buffer_base, ds->bts_index, ds->bts_absolute_maximum, ds->bts_interrupt_threshold 
+	printk("bts_buffer_base %lx bts_index %lx bts_absolute_maximum %lx pebs_buffer_base %lx \n",
+		ds->bts_buffer_base, ds->bts_index, ds->bts_absolute_maximum, ds->pebs_buffer_base
 	);
 
 	return 0;
@@ -1130,8 +1134,16 @@ int init_debug_store(struct vcpu *v)
 {
 	struct vpmu_struct *vpmu;
 	int ret;
+
+	vpmu_load(v);
 	vpmu = vcpu_vpmu(v);
+
 	if(vpmu->bts_enable == 0){
+	
+		//!!!!NOTE!!!! remenber to revise size 
+		vpmu->bts_size_order = 0;
+		//!!!!NOTE!!!! remenber to revise size 
+
 		memset(&(vpmu->ds), 0, sizeof(struct debug_store));
 		ret = alloc_bts_buffer(v, vpmu);
 		if(ret == -1){
@@ -1139,45 +1151,98 @@ int init_debug_store(struct vcpu *v)
 			return -1;
 		}
 		vpmu->bts_enable = 1;
+		vpmu_save(v);
+
 		printk("<VT> debug_store init ok\n");
 		return 0;
 	}
 	return -2;
 }
-int write_bts_msr(struct vcpu *v)
+int write_ds_msr(struct vcpu *v)
+{
+	struct vpmu_struct *vpmu;
+	u64	msr_content = 0;
+	int ret = 0;
+	struct debug_store *ds;
+
+	vpmu_load(v);
+	vpmu = vcpu_vpmu(v);
+
+	if(vpmu->bts_enable == 2){	
+
+		/*write MSR_IA32_DS_AREA*/
+		msr_content = (u64)&(vpmu->ds);
+//		if(is_canonical_address(msr_content))
+//			printk("<VT> MSR_IA32_DS_AREA msr_content:%lx is canonical\n", msr_content);
+
+		ret = vmx_add_guest_msr(MSR_IA32_DS_AREA);
+		if(ret < 0)
+			printk("<VT> vmx_add_guest_msr error\n");
+		ret = vmx_write_guest_msr(MSR_IA32_DS_AREA, msr_content);
+		if(ret < 0)
+			printk("<VT> vmx_write_guest_msr error\n");
+
+		ret = vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DS_AREA, msr_content);
+//		if(ret==1)
+//			printk("<VT> write MSR_IA32_DS_AREA ok\n");
+		
+
+		vpmu_save(v);
+		vpmu_load(v);
+
+		msr_content = 0;
+		rdmsrl(MSR_IA32_DS_AREA, msr_content);
+		printk("<VT> rdmsrl:%lx\n", msr_content);
+		msr_content = 0;		
+		vmx_read_guest_msr(MSR_IA32_DS_AREA, &msr_content);
+		printk("<VT> vmx_read_guest_msr:%lx\n", msr_content);
+		ds = (struct debug_store *)(msr_content);
+		printk("After write_ds_msr bts_buffer_base %lx bts_index %lx bts_absolute_maximum %lx pebs_buffer_base %lx\n",
+			ds->bts_buffer_base, ds->bts_index, ds->bts_absolute_maximum, ds->pebs_buffer_base
+		);
+
+
+		vpmu->bts_enable = 3;	
+		return 1;
+	}
+	else
+		return -2;
+}
+
+int write_dectl_msr(struct vcpu *v)
 {
 	struct vpmu_struct *vpmu;
 	//unsigned int msr;
-//	u64	msr_content;
-//	int ret = 0;
+	u64	msr_content = 0;
+	int ret;
 
 	vpmu = vcpu_vpmu(v);
-
-
-	//if(vpmu->bts_enable == 1){
-	if(vpmu->bts_enable == 0){
-		vpmu->bts_enable = 1;
-
-		/*write MSR_IA32_DS_AREA*/
-		/*msr_content = (u64)&(vpmu->ds);
-		if(is_canonical_address(msr_content))
-			printk("<VT> MSR_IA32_DS_AREA msr_content:%lx is canonical\n", msr_content);
-		ret = vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DS_AREA, msr_content);
-		if(ret==1)
-			printk("<VT> write MSR_IA32_DS_AREA ok\n");*/
-
-
+	if(vpmu->bts_enable == 4){
 		/*write MSR_IA32_DEBUGCTLMSR*/
-		/*vpmu->arch_vpmu_ops->do_rdmsr(MSR_IA32_DEBUGCTLMSR, &msr_content);
-		printk("<VT> original MSR_IA32_DEBUGCTLMSR msr_content val:%lx\n", msr_content);
-		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS; 
-		printk("<VT> revised MSR_IA32_DEBUGCTLMSR msr_content val:%lx\n", msr_content);
-		vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DEBUGCTLMSR, msr_content);
+		msr_content = 0;
+
+		ret = vmx_add_guest_msr(MSR_IA32_DEBUGCTLMSR);
+		if(ret < 0)
+			printk("<VT> vmx_add_guest_msr error\n");
 		vpmu->arch_vpmu_ops->do_rdmsr(MSR_IA32_DEBUGCTLMSR, &msr_content);
-		printk("<VT> msr_content from MSR_IA32_DEBUGCTL %lx\n", msr_content);*/
+		printk("<VT> write_dectl_msr rdmsrl oringinal msr_content:%lx\n", msr_content);
+//		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS; 
+//		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTS_OFF_OS; 
+		msr_content = 0;
+
+		vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DEBUGCTLMSR, msr_content);
+		vmx_write_guest_msr(MSR_IA32_DEBUGCTLMSR, msr_content);
+		
+		
+		msr_content = __vmread(GUEST_IA32_DEBUGCTL);
+		printk("<VT> write_dectl_msr __vmread oringinal msr_content:%lx\n", msr_content);
+//		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS;
+//		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTS_OFF_OS;
+		msr_content = 0;		
+		__vmwrite(GUEST_IA32_DEBUGCTL, msr_content);
 
 
-		printk("<VT> write_bts_msr ok\n");
+		vpmu->bts_enable = 5;
 		return 1;
 	}
 	else
@@ -1188,11 +1253,16 @@ int write_bts_msr(struct vcpu *v)
 
 
 
-
 void vmx_do_resume(struct vcpu *v)
 {
     bool_t debug_state;
-//	int ret;
+	int ret;
+
+	unsigned long msr_content = 0;
+	struct vpmu_struct *vpmu;
+	//struct debug_store *ds;
+	vpmu = vcpu_vpmu(v);
+
 
     if ( v->arch.hvm_vmx.active_cpu == smp_processor_id() )
     {
@@ -1247,19 +1317,44 @@ void vmx_do_resume(struct vcpu *v)
     hvm_do_resume(v);
 
 	/*<VT> add*/
-	/*if(v->domain->domain_id == 1){
-		//ret = init_debug_store(v);
-		ret = 0;
+	if(v->domain->domain_id >= 1 && v->domain->domain_id <= 10){
+
+		ret = init_debug_store(v);
 		if(ret == -1){
 			printk("<VT> init error\n");
 		}
-		else if(ret == 0){
-			ret = write_bts_msr(v);
+
+		if(vcpu_vpmu(v)->bts_enable == 2){
+			msr_content = DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTS_OFF_OS; 
+			__vmwrite(GUEST_IA32_DEBUGCTL, msr_content);
+			vpmu->arch_vpmu_ops->do_wrmsr(MSR_IA32_DEBUGCTLMSR, msr_content);
+			printk("<VT> set MSR_IA32_DEBUGCTLMSR to 0");
+
+//			ret = write_ds_msr(v);
+//			if(ret < 0){
+//				printk("<VT> write write_ds_msr msr error\n");
+//			}
+			vcpu_vpmu(v)->bts_enable = 1;			
+		}
+		if(vcpu_vpmu(v)->bts_enable == 4){
+			ret = write_dectl_msr(v);
 			if(ret < 0){
-				//printk("<VT> write bfs msr error\n");
+				printk("<VT> write write_dectl_msr msr error\n");
 			}
 		}
-	}*/
+		if(vcpu_vpmu(v)->bts_enable == 5){
+/*			msr_content = 0;
+			rdmsrl(MSR_IA32_DS_AREA, msr_content);
+			printk("<VT>rdmsrl:%lx\n", msr_content);
+			msr_content = 0;
+			vmx_read_guest_msr(MSR_IA32_DS_AREA, &msr_content);
+			printk("<VT>vmx_read_guest_msr:%lx\n", msr_content);
+			ds = (struct debug_store *)(msr_content);
+			printk("After write_dectl_msr bts_buffer_base %lx bts_index %lx bts_absolute_maximum %lx pebs_buffer_base %lx\n",
+				ds->bts_buffer_base, ds->bts_index, ds->bts_absolute_maximum, ds->pebs_buffer_base
+			);*/
+		}
+	}
 
     reset_stack_and_jump(vmx_asm_do_vmentry);
 }
@@ -1297,22 +1392,29 @@ static void vmx_dump_sel2(char *name, uint32_t lim)
 
 
 
-
-
-
-
-
-
-
 void vmcs_dump_vcpu(struct vcpu *v)
 {
     struct cpu_user_regs *regs = &v->arch.user_regs;
     //unsigned long long x;
+//	int ret;
 
     if ( v == current )
         regs = guest_cpu_user_regs();
 
     vmx_vmcs_enter(v);
+
+	/*if(vcpu_vpmu(v)->bts_enable == 3){
+		vcpu_vpmu(v)->bts_enable = 4;
+	}
+	else if(vcpu_vpmu(v)->bts_enable == 1){
+		vcpu_vpmu(v)->bts_enable = 2;
+	}*/
+
+	if(vcpu_vpmu(v)->bts_enable == 1){
+		vcpu_vpmu(v)->bts_enable = 2;
+	}
+
+
 
     /*printk("*** Guest State ***\n");
     printk("CR0: actual=0x%016llx, shadow=0x%016llx, gh_mask=%016llx\n",
@@ -1430,8 +1532,6 @@ void vmcs_dump_vcpu(struct vcpu *v)
            (uint32_t)vmr(VIRTUAL_PROCESSOR_ID));*/
 
 
-
-	
 
 
     vmx_vmcs_exit(v);
