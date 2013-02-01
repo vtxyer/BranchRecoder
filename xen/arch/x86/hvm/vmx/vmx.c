@@ -59,7 +59,8 @@
 
 #define GUEST_PAGING_LEVELS 4
 #include <asm/guest_pt.h>
-
+#include <public/event_channel.h>
+#include <xen/event.h>
 
 
 enum handler_return { HNDL_done, HNDL_unhandled, HNDL_exception_raised };
@@ -3062,6 +3063,16 @@ int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1)
 //			if(vcpu_vpmu(v)->bts_enable == 2){
 				vcpu_vpmu(v)->bts_enable = 3;
 //			}
+			break;
+
+
+		case 4:
+			/*test event channel*/
+			if(arg == 0){
+				set_global_virq_handler(d, 20);
+			}
+			else 
+				send_global_virq(20);
 			break;
 
 
