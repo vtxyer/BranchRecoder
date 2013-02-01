@@ -234,6 +234,11 @@ struct domain
     atomic_t         paged_pages;     /* number of paged-out pages          */
     unsigned int     xenheap_pages;   /* # pages allocated from Xen heap    */
 
+
+	/*<VT> add*/
+	unsigned long 	 extra_gfn[10];
+
+
     unsigned int     max_vcpus;
 
     /* Scheduling. */

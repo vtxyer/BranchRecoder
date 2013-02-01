@@ -523,11 +523,9 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
     /* Setup LVTPC in local apic */
     if ( vpmu_is_set(vpmu, VPMU_RUNNING) &&
          is_vlapic_lvtpc_enabled(vcpu_vlapic(v)) ){
-		printk("<VT>inert vlapic\n");
         apic_write_around(APIC_LVTPC, PMU_APIC_VECTOR);
 	}
     else{
-		printk("<VT>Not inert vlapic\n");
         apic_write_around(APIC_LVTPC, PMU_APIC_VECTOR | APIC_LVT_MASKED);
 	}
 
@@ -561,12 +559,10 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
         if (inject_gp)
             hvm_inject_hw_exception(TRAP_gp_fault, 0);
         else{
-			printk("<VT> into !MSR_TYPE_GLOBAL wrmsrl\n");
             wrmsrl(msr, msr_content);
 		}
     }
     else{
-		printk("<VT> type=MSR_TYPE_GLOBAL vmx_write_guest_msr()\n");
         vmx_write_guest_msr(MSR_CORE_PERF_GLOBAL_CTRL, msr_content);
 	}
 
@@ -630,6 +626,48 @@ static void core2_vpmu_do_cpuid(unsigned int input,
     }
 }
 
+
+
+/*<VT> add*/
+//int intel_pmu_drain_bts_buffer(struct vpmu_struct *vpmu)
+//{
+//	struct debug_store *ds;
+//	struct bts_record {
+//		u64	from;
+//		u64	to;
+//		u64	flags;
+//	};
+//	struct bts_record *at, *top;
+//	uint32_t pfec;
+//	unsigned long mfn;
+//
+//	ds = vpmu->ds;
+//
+///*	mfn = paging_gva_to_gfn(vpmu_vcpu(vpmu), vpmu->ds_base, &pfec);
+//	if(mfn == INVALID_MFN){
+//		printk("<VT> get wrong mfn\n");
+//		return -1;
+//	}
+//
+//	ds = (struct debug_store *)map_domain_page(mfn);*/
+//
+//	at  = (struct bts_record *)(unsigned long)vpmu->xen_bts_base;
+//	//top = (struct bts_record *)(unsigned long)ds->bts_index;
+//
+//	if (top <= at)
+//		return 0;
+//
+//	for (; at < top; at++) {
+//		printk("<VT>from:%lx to:%lx\n", at->from, at->to);
+//	}
+//
+//	
+//	return 1;
+//}
+//
+
+
+
 static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
 {
     struct vcpu *v = current;
@@ -645,7 +683,6 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     {
         if ( is_pmc_quirk ){
             handle_pmc_quirk(msr_content);
-			printk("<VT>into core2_vpmu_do_interrupt is_pmc_quirk\n");
 		}
         core2_vpmu_cxt->global_ovf_status |= msr_content;
         msr_content = 0xC000000700000000 | ((1 << core2_get_pmc_count()) - 1);
@@ -655,9 +692,14 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     {
         /* No PMC overflow but perhaps a Trace Message interrupt. */
         msr_content = __vmread(GUEST_IA32_DEBUGCTL);
-		printk("<VT> into core2_vpmu_do_interrupt Trace Message interrupt region\n");
         if ( !(msr_content & IA32_DEBUGCTLMSR_TR) )
             return 0;
+		printk("<VT> into core2_vpmu_do_interrupt Trace Message interrupt region\n");
+
+		/*<VT> add Hypervisor BTS so don't need to set vlapic return 1*/
+		if(vpmu->bts_enable == 2){
+			return 1;
+		}
     }
 
     apic_write_around(APIC_LVTPC, apic_read(APIC_LVTPC) & ~APIC_LVT_MASKED);

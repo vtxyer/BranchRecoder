@@ -1093,7 +1093,7 @@ int write_ds_msr(struct vcpu *v, int op)
 	vpmu = vcpu_vpmu(v);
 	
 	if(op == 1){	
-		msr_content = vpmu->ds_addr;
+		msr_content = vpmu->guest_ds_addr;
 	}
 	else if(op == 0){
 		msr_content = 0;		
@@ -1113,8 +1113,8 @@ int write_dectl_msr(struct vcpu *v, int op)
 	vpmu = vcpu_vpmu(v);
 	if(op == 1){
 //		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS | DEBUGCTLMSR_BTS_OFF_USR; 
-//		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS; 
-		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTS_OFF_OS; 
+		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTINT | DEBUGCTLMSR_BTS_OFF_OS; 
+//		msr_content |= DEBUGCTLMSR_TR | DEBUGCTLMSR_BTS | DEBUGCTLMSR_BTS_OFF_OS; 
 	}
 	else if(op == 0){
 		msr_content = 0;
@@ -1193,7 +1193,7 @@ void vmx_do_resume(struct vcpu *v)
 
 
 	/*<VT> add*/
-	if(vcpu_vpmu(v)->bts_enable > 1 && vcpu_vpmu(v)->bts_enable < 4){
+	if(vcpu_vpmu(v)->bts_enable > 1 && vcpu_vpmu(v)->bts_enable < 5){
 		if(vcpu_vpmu(v)->bts_enable == 2){
 			printk("<VT> start BTS tracing\n");
 			ret = write_ds_msr(v, 1);
@@ -1205,6 +1205,7 @@ void vmx_do_resume(struct vcpu *v)
 					printk("<VT> assign DEBUGCTLMSR error\n");
 			}
 			vcpu_vpmu(v)->bts_enable = 1;
+			printk("<VT> start tracing\n");
 		}
 		if(vcpu_vpmu(v)->bts_enable == 3){
 			printk("<VT> stop BTS tracing\n");
@@ -1220,6 +1221,8 @@ void vmx_do_resume(struct vcpu *v)
 			/*NOTE: Remember to free debug store*/
 			/**/
 			vcpu_vpmu(v)->bts_enable = 0;
+
+			printk("<VT> stop tracing\n");
 		}
 	}
 

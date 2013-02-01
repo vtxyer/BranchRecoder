@@ -59,23 +59,6 @@
 #define DEBUGCTLMSR_UNCRE_PMI_EN	(1UL << 13)
 #define DEBUGCTLMSR_FREEZE_WHILE_SMM_EN	(1UL << 14)
 
-
-#define BTS_RECORD_SIZE		24
-#define MAX_PEBS_EVENTS      8
-struct debug_store {
-	u64	bts_buffer_base;
-	u64	bts_index;
-	u64	bts_absolute_maximum;
-	u64	bts_interrupt_threshold;
-	u64	pebs_buffer_base;
-	u64	pebs_index;
-	u64	pebs_absolute_maximum;
-	u64	pebs_interrupt_threshold;
-	u64	pebs_event_reset[MAX_PEBS_EVENTS];
-};
-
-
-
 /* Arch specific operations shared by all vpmus */
 struct arch_vpmu_ops {
     int (*do_wrmsr)(unsigned int msr, uint64_t msr_content);
@@ -98,7 +81,11 @@ struct vpmu_struct {
     struct arch_vpmu_ops *arch_vpmu_ops;
 
 	/*<VT> add*/
-	u64 ds_addr;
+	int host_domID;
+	unsigned long guest_ds_addr;
+	unsigned long host_ds_addr;
+	unsigned long guest_bts_base;
+	unsigned long host_bts_base;
 	u32 bts_size_order;
 	u32 bts_enable;
 };

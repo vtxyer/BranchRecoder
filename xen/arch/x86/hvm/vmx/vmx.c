@@ -57,6 +57,8 @@
 #include <asm/hvm/nestedhvm.h>
 
 
+#define GUEST_PAGING_LEVELS 4
+#include <asm/guest_pt.h>
 
 
 
@@ -1846,7 +1848,6 @@ static int is_last_branch_msr(u32 ecx)
 
 static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
 {
-	struct debug_store *ds;
     HVM_DBG_LOG(DBG_LEVEL_1, "ecx=%x", msr);
 
     switch ( msr )
@@ -1865,7 +1866,7 @@ static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
 #ifdef __i386__
         *msr_content |= (u64)__vmread(GUEST_IA32_DEBUGCTL_HIGH) << 32;
 #endif
-		printk("<VT>  go into xen/arch/x86/hvm/vmx/vmx.c MSR_IA32_DEBUGCTLMSR msr_content:%lx\n", *msr_content);
+		printk("<VT>  vmx_msr_read_intercept()  MSR_IA32_DEBUGCTLMSR msr_content:%lx\n", *msr_content);
         break;
     case IA32_FEATURE_CONTROL_MSR:
     case MSR_IA32_VMX_BASIC...MSR_IA32_VMX_TRUE_ENTRY_CTLS:
@@ -1873,21 +1874,6 @@ static int vmx_msr_read_intercept(unsigned int msr, uint64_t *msr_content)
             goto gp_fault;
         break;
     case MSR_IA32_MISC_ENABLE:
-
-		/*<VT>add to know value in MSR_IA32_DEBUGCTLMSR*/
-//		*msr_content = __vmread(GUEST_IA32_DEBUGCTL);
-//		printk("<VT>Self vmread GUEST_IA32_DEBUGCTL msr_content:%lx\n", *msr_content);
-//		vpmu_do_rdmsr(MSR_IA32_DEBUGCTLMSR, msr_content);
-//		printk("<VT>Self rdmsr MSR_IA32_DEBUGCTLMSR msr_content:%lx\n", *msr_content);
-
-		if( vcpu_vpmu(current)->bts_enable >= 3){
-			vpmu_do_rdmsr(MSR_IA32_DS_AREA, msr_content);
-			ds = (struct debug_store *)(*msr_content);
-			printk("bts_buffer_base %lx bts_index %lx bts_absolute_maximum %lx pebs_buffer_base %lx \n",
-				ds->bts_buffer_base, ds->bts_index, ds->bts_absolute_maximum, ds->pebs_buffer_base
-			);
-		}
-
 
         rdmsrl(MSR_IA32_MISC_ENABLE, *msr_content);
         /* Debug Trace Store is not supported. */
@@ -2841,92 +2827,241 @@ void vmx_vmenter_helper(void)
 
 
 /*<VT> add*/
-int alloc_guest_buffer(struct domain *d, unsigned long size)
+#define BTS_RECORD_SIZE		24
+#define MAX_PEBS_EVENTS      8
+struct debug_store {
+	u64	bts_buffer_base;
+	u64	bts_index;
+	u64	bts_absolute_maximum;
+	u64	bts_interrupt_threshold;
+	u64	pebs_buffer_base;
+	u64	pebs_index;
+	u64	pebs_absolute_maximum;
+	u64	pebs_interrupt_threshold;
+	u64	pebs_event_reset[MAX_PEBS_EVENTS];
+};
+struct host_vpmu_data{
+	unsigned long host_domID; 
+	unsigned long host_ds_addr;
+	unsigned long host_bts_base;
+	unsigned long bts_size_order;
+};
+
+
+/*
+ * 1. get physical address from  host address
+ * 2. get guest gfn
+ * 3. set guest page table???
+ * 4. set ept table from gfn to mfn
+ * 5. set ds->bts_buffer_base 
+ * 	return guest virtual address
+ * */
+unsigned long set_ds_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 {
-	return 0;
+	struct p2m_domain *p2m;
+	unsigned long host_ds_gfn, host_ds_mfn;
+	unsigned long guest_extra_gfn_base = 0;
+	unsigned long guest_va_base;
+//	uint32_t pfec = PFEC_page_present;
+	p2m_access_t a;
+	p2m_type_t pt;
+	int ret;
+	
+	p2m = p2m_get_hostp2m(v->domain);
+	guest_va_base = 0xffff880000000000;
+
+	/*Translate host virtual addr to physical address, Have to set CR3???? */
+//	host_ds_gfn = paging_gva_to_gfn(v, vpmu->host_ds_addr, &pfec);
+	host_ds_gfn = (vpmu->host_ds_addr >> 12);
+	if(host_ds_gfn==INVALID_GFN){
+		printk("<VT>ds get gfn %lx error\n", vpmu->host_ds_addr);
+		return -1;
+	}
+	host_ds_mfn = p2m->get_entry(p2m, host_ds_gfn, &pt, &a, 0, NULL);	
+	if(host_ds_mfn==INVALID_MFN){
+		printk("<VT>ds get mfn %lx error\n", host_ds_gfn);
+		return -1;
+	}
+
+	/*get guest gfn, !!!Need to revise*/
+	if((v->domain->extra_gfn[0]) == 0){
+		v->domain->extra_gfn[0] = v->domain->max_pages + 0x40000; //max physical + 1G	
+		guest_extra_gfn_base = v->domain->extra_gfn[0];
+		printk("<VT> init guest extra base %lx\n", guest_extra_gfn_base);
+	}
+
+	/*set guest page table???*/
+
+
+
+	/*create and set guest ept entry to point to host*/
+	pt = 0; //p2m_ram_rw
+	a = 3; //p2m_access_rw
+	ret = p2m->set_entry(p2m, guest_extra_gfn_base, host_ds_mfn, PAGE_ORDER_4K, pt, a);
+	if(ret == 0){
+		printk("<VT> ds set_entry error\n");
+		return -1;
+	}
+
+	/*set ds guest address*/
+	vpmu->guest_ds_addr = (guest_va_base | (guest_extra_gfn_base<<12) );
+
+	return vpmu->guest_ds_addr;
 }
-
-int init_debug_store(struct vcpu *v, unsigned long bts_buffer_size)
+unsigned long set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 {
-	struct vpmu_struct *vpmu;
-/*	int ret;
-	int max, thresh;
-	unsigned long buffer_size;
-	struct page_info *pg;*/
+	struct p2m_domain *p2m;
+	unsigned long host_bts_base_gfn, host_bts_base_mfn;
+	unsigned long guest_extra_gfn_base;
+//	uint32_t pfec = PFEC_page_present;
+	p2m_access_t a;
+	p2m_type_t pt;
+	int ret;
+	unsigned long guest_va_base;
+	unsigned int i;
+	unsigned long host_bts_base;
+	
+	p2m = p2m_get_hostp2m(v->domain);
 
-	if(v == NULL){
-		printk("<VT> error vcpu in init_debug_store\n");
-		return -2;
+	/*!!!Need to revise*/
+	guest_va_base = 0xffff880000000000;
+
+	/*!!!!Need to revise*/
+	if(v->domain->extra_gfn[0] == 0 ){
+		printk("<VT>error bts extra_gfn not init\n");
+		return -1;
 	}
-	vpmu = vcpu_vpmu(v);
-	if(vpmu == NULL){
-		printk("<VT> error vpmu in init_debug_store\n");
-		return -2;
-	}
+	guest_extra_gfn_base = v->domain->extra_gfn[0];
 
-	if(vpmu->bts_enable == 0){	
-		vpmu->bts_size_order = bts_buffer_size/PAGE_SIZE + 1;
 
-		/*NOTE: Remaing to do alloc guest space from hypervisor*/
-		/*ds = alloc_guest_buffer(v->domain, sizeof(struct debug_store));
-		buffer_size = (PAGE_SIZE << (vpmu->bts_size_order));
-		pg = NULL;
-		pg = v->domain->arch.paging.alloc_page(v->domain);
-		if(pg == NULL){
-			printk("<VT> get free page error\n");
+	host_bts_base = vpmu->host_bts_base;
+
+	host_bts_base_gfn = (vpmu->host_bts_base >> 12);
+
+	for(i=0; i<vpmu->bts_size_order; i++){
+		/*Translate host virtual addr to physical address, Have to set CR3???? */
+//		host_bts_base_gfn = paging_gva_to_gfn(v, host_bts_base, &pfec);
+
+		if(host_bts_base_gfn==INVALID_GFN){
+			printk("<VT>bts get gfn error\n");
 			return -1;
 		}
-		max = buffer_size / BTS_RECORD_SIZE;
-		thresh = max ;
-		ds->bts_buffer_base = (u64)page_to_virt(pg);
-		ds->bts_index = ds->bts_buffer_base;
-		ds->bts_absolute_maximum = ds->bts_buffer_base +
-			max * BTS_RECORD_SIZE;
-		ds->bts_interrupt_threshold = ds->bts_buffer_base + 
-			thresh * BTS_RECORD_SIZE;*/
+		host_bts_base_mfn = p2m->get_entry(p2m, host_bts_base_gfn, &pt, &a, 0, NULL);	
+		if(host_bts_base_mfn==INVALID_MFN){
+			printk("<VT>bts get mfn error\n");
+			return -1;
+		}
 
+		/*set guest page table???*/
 
-		printk("<VT> debug_store init ok\n");
-		vpmu->bts_enable = 1;
-		return 0;
+		/*create and set guest ept entry to point to host*/
+		pt = 0; //p2m_ram_rw
+		a = 3; //p2m_access_rw
+		ret = p2m->set_entry(p2m, guest_extra_gfn_base+1+i, host_bts_base_mfn, PAGE_ORDER_4K, pt, a);	
+		if(ret == 0){
+			printk("<VT> bts set_entry error\n");
+			return -1;
+		}
+//		host_bts_base += 4096;
+		host_bts_base_gfn += 1;
 	}
-	else{
-		printk("<VT> Already init debug store\n");
-		return -2;
-	}
+
+	/*set ds guest address*/
+	vpmu->guest_bts_base = (guest_va_base | ((guest_extra_gfn_base+1)<<12) );
+
+	return vpmu->guest_bts_base;
+
 }
+
+
+
+int init_debug_store(struct vcpu *v, struct host_vpmu_data *host_vpmu_data)
+{
+	struct debug_store *ds;
+	int max, thresh;
+	unsigned long buffer_size;
+	struct vpmu_struct *vpmu;
+	int ret;
+
+	vpmu = vcpu_vpmu(v);
+	/*set up vpmu related value*/
+	vpmu->host_domID = host_vpmu_data->host_domID;
+	vpmu->host_ds_addr = host_vpmu_data->host_ds_addr;
+	vpmu->host_bts_base = host_vpmu_data->host_bts_base;
+	vpmu->bts_size_order = host_vpmu_data->bts_size_order;
+
+	printk("<VT> host_domID:%lu host_ds_addr:%lx host_bts_base:%lx bts_size_order:%lu\n",
+		host_vpmu_data->host_domID, host_vpmu_data->host_ds_addr, host_vpmu_data->host_bts_base, host_vpmu_data->bts_size_order
+	);
+
+
+	ds = (struct debug_store *)host_vpmu_data->host_ds_addr;
+
+	buffer_size = PAGE_SIZE*(host_vpmu_data->bts_size_order);	
+	max = buffer_size / BTS_RECORD_SIZE;
+	thresh = max;
+
+	ret = set_ds_guest_map(v, vpmu);
+	if(ret<0){
+		printk("<VT>set_ds_guest_map error\n");
+		return -1;
+	}
+
+	ds->bts_buffer_base = set_bts_guest_map(v, vpmu);
+	if(ds->bts_buffer_base < 0){
+		printk("<VT>set_bts_guest_map error\n");
+		return -1;
+	}
+
+	ds->bts_index = ds->bts_buffer_base;
+	ds->bts_absolute_maximum = ds->bts_buffer_base +
+		max * BTS_RECORD_SIZE;
+	ds->bts_interrupt_threshold = ds->bts_buffer_base + 
+		thresh * BTS_RECORD_SIZE;
+
+	vpmu->bts_enable = 1;
+	return 1;
+}
+
 
 int do_vt_op(int op, int domID, unsigned long arg, unsigned long *arg_buf1)
 {
 	struct domain *d = get_domain_by_id(domID);
-	struct vcpu *v = NULL;
+	struct vcpu *v = NULL;	
+	struct host_vpmu_data *host_vpmu_data;
 
 	if(d == NULL){
 		printk("Wrong domain ID\n");
 		return -1;
 	}	
 
+	v = d->vcpu[0];
 
 	printk("Into vt_op op:%d domID:%d arg:%lu\n", op, domID, arg);
 	switch(op){
+		case 0:
+			/*get bts_enable value*/
+			arg_buf1[0] = vcpu_vpmu(v)->bts_enable; 
+			break;
 		case 1:
 			/*Init debug register*/
-			for_each_vcpu(d, v){
-				vcpu_vpmu(v)->ds_addr = arg;
-				init_debug_store(v, 4096);
-			}
+//			for_each_vcpu(d, v){
+//				vcpu_vpmu(v)->ds_addr = arg;
+				host_vpmu_data = (struct host_vpmu_data *)arg_buf1;
+				init_debug_store(v, host_vpmu_data);
+//			}
 			break;
 		case 2:
 			/*start BTS tracing*/
-			if(vcpu_vpmu(v)->bts_enable == 1){
+			if(vcpu_vpmu(v)->bts_enable >= 1){
 				vcpu_vpmu(v)->bts_enable = 2;
 			}
 			break;
 		case 3:
 			/*stop BTS tracing*/
-			if(vcpu_vpmu(v)->bts_enable == 2){
+//			if(vcpu_vpmu(v)->bts_enable == 2){
 				vcpu_vpmu(v)->bts_enable = 3;
-			}
+//			}
 			break;
 
 
