@@ -1,5 +1,5 @@
-version.o: version.c /XenSource/BranchRecord_xen/xen/include/xen/config.h \
- /XenSource/BranchRecord_xen/xen/include/xen/compiler.h \
- /XenSource/BranchRecord_xen/xen/include/asm/config.h \
- /XenSource/BranchRecord_xen/xen/include/xen/compile.h \
- /XenSource/BranchRecord_xen/xen/include/xen/version.h
+version.o: version.c /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/xen/compiler.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/asm/config.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/xen/compile.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/xen/version.h

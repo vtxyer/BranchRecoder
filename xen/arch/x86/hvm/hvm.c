@@ -3118,6 +3118,18 @@ static long hvm_vcpu_op(
     return rc;
 }
 
+
+
+/*<VT> add*/
+static int hvm_vt_op(int op, int domID, unsigned long arg, unsigned long *argbuf1)
+{
+	return	do_vt_op(op, domID, arg, argbuf1);
+}
+
+
+
+
+
 typedef unsigned long hvm_hypercall_t(
     unsigned long, unsigned long, unsigned long, unsigned long, unsigned long,
     unsigned long);
@@ -3138,7 +3150,8 @@ static hvm_hypercall_t *hvm_hypercall32_table[NR_hypercalls] = {
     HYPERCALL(set_timer_op),
     HYPERCALL(hvm_op),
     HYPERCALL(sysctl),
-    HYPERCALL(tmem_op)
+    HYPERCALL(tmem_op),
+    HYPERCALL(vt_op)
 };
 
 #else /* defined(__x86_64__) */
@@ -3217,13 +3230,17 @@ static hvm_hypercall_t *hvm_hypercall64_table[NR_hypercalls] = {
     [ __HYPERVISOR_grant_table_op ] = (hvm_hypercall_t *)hvm_grant_table_op,
     [ __HYPERVISOR_vcpu_op ] = (hvm_hypercall_t *)hvm_vcpu_op,
     [ __HYPERVISOR_physdev_op ] = (hvm_hypercall_t *)hvm_physdev_op,
+
+    [ __HYPERVISOR_vt_op ] = (hvm_hypercall_t *)hvm_vt_op,
+
     HYPERCALL(xen_version),
     HYPERCALL(event_channel_op),
     HYPERCALL(sched_op),
     HYPERCALL(set_timer_op),
     HYPERCALL(hvm_op),
     HYPERCALL(sysctl),
-    HYPERCALL(tmem_op)
+    HYPERCALL(tmem_op),
+    HYPERCALL(vt_op)
 };
 
 #define COMPAT_CALL(x)                                        \
@@ -3240,7 +3257,8 @@ static hvm_hypercall_t *hvm_hypercall32_table[NR_hypercalls] = {
     COMPAT_CALL(set_timer_op),
     HYPERCALL(hvm_op),
     HYPERCALL(sysctl),
-    HYPERCALL(tmem_op)
+    HYPERCALL(tmem_op),
+    HYPERCALL(vt_op)
 };
 
 #endif /* defined(__x86_64__) */

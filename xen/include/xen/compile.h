@@ -1,8 +1,8 @@
-#define XEN_COMPILE_DATE	"Sat Feb  2 05:15:05 CST 2013"
-#define XEN_COMPILE_TIME	"05:15:05"
+#define XEN_COMPILE_DATE	"Sat Feb  2 23:01:54 CST 2013"
+#define XEN_COMPILE_TIME	"23:01:54"
 #define XEN_COMPILE_BY		"root"
 #define XEN_COMPILE_DOMAIN	"(none)"
-#define XEN_COMPILE_HOST	"XenTransform"
+#define XEN_COMPILE_HOST	"VTWorkStation"
 #define XEN_COMPILER		"gcc (GCC) 4.4.6 20120305 (Red Hat 4.4.6-4)"
 
 #define XEN_VERSION		4

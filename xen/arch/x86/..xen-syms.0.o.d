@@ -1,6 +1,6 @@
-/XenSource/BranchRecord_xen/xen/.xen-syms.0.o: \
- /XenSource/BranchRecord_xen/xen/.xen-syms.0.S \
- /XenSource/BranchRecord_xen/xen/include/xen/config.h \
- /XenSource/BranchRecord_xen/xen/include/asm/config.h \
- /XenSource/BranchRecord_xen/xen/include/xen/config.h \
- /XenSource/BranchRecord_xen/xen/include/asm/types.h
+/home/Xen/BranchRecoder_XEN/xen/.xen-syms.0.o: \
+ /home/Xen/BranchRecoder_XEN/xen/.xen-syms.0.S \
+ /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/asm/config.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
+ /home/Xen/BranchRecoder_XEN/xen/include/asm/types.h
