@@ -71,19 +71,19 @@
 #define _VGCF_failsafe_disables_events 3 /* _VGCF_failsafe_disables_events */
 #define _VGCF_syscall_disables_events 4 /* _VGCF_syscall_disables_events */
 
-#define VCPU_svm_vmcb_pa 1304 /* offsetof(struct vcpu, arch.hvm_vcpu.u.svm.vmcb_pa) */
-#define VCPU_svm_vmcb 1296 /* offsetof(struct vcpu, arch.hvm_vcpu.u.svm.vmcb) */
-#define VCPU_svm_vmcb_in_sync 1324 /* offsetof(struct vcpu, arch.hvm_vcpu.u.svm.vmcb_in_sync) */
+#define VCPU_svm_vmcb_pa 1312 /* offsetof(struct vcpu, arch.hvm_vcpu.u.svm.vmcb_pa) */
+#define VCPU_svm_vmcb 1304 /* offsetof(struct vcpu, arch.hvm_vcpu.u.svm.vmcb) */
+#define VCPU_svm_vmcb_in_sync 1332 /* offsetof(struct vcpu, arch.hvm_vcpu.u.svm.vmcb_in_sync) */
 
-#define VCPU_vmx_launched 1332 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.launched) */
-#define VCPU_vmx_realmode 1448 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.vmx_realmode) */
-#define VCPU_vmx_emulate 1449 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.vmx_emulate) */
-#define VCPU_vm86_seg_mask 1450 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.vm86_segment_mask) */
+#define VCPU_vmx_launched 1340 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.launched) */
+#define VCPU_vmx_realmode 1456 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.vmx_realmode) */
+#define VCPU_vmx_emulate 1457 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.vmx_emulate) */
+#define VCPU_vm86_seg_mask 1458 /* offsetof(struct vcpu, arch.hvm_vcpu.u.vmx.vm86_segment_mask) */
 #define VCPU_hvm_guest_cr2 840 /* offsetof(struct vcpu, arch.hvm_vcpu.guest_cr[2]) */
 
-#define VCPU_nhvm_guestmode 1616 /* offsetof(struct vcpu, arch.hvm_vcpu.nvcpu.nv_guestmode) */
-#define VCPU_nhvm_p2m 1848 /* offsetof(struct vcpu, arch.hvm_vcpu.nvcpu.nv_p2m) */
-#define VCPU_nsvm_hap_enabled 1804 /* offsetof(struct vcpu, arch.hvm_vcpu.nvcpu.u.nsvm.ns_hap_enabled) */
+#define VCPU_nhvm_guestmode 1624 /* offsetof(struct vcpu, arch.hvm_vcpu.nvcpu.nv_guestmode) */
+#define VCPU_nhvm_p2m 1856 /* offsetof(struct vcpu, arch.hvm_vcpu.nvcpu.nv_p2m) */
+#define VCPU_nsvm_hap_enabled 1812 /* offsetof(struct vcpu, arch.hvm_vcpu.nvcpu.u.nsvm.ns_hap_enabled) */
 
 #define DOMAIN_is_32bit_pv 3284 /* offsetof(struct domain, arch.is_32bit_pv) */
 
