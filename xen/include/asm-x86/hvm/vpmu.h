@@ -82,6 +82,7 @@ struct vpmu_struct {
 
 	/*<VT> add*/
 	int host_domID;
+	unsigned long host_cr3;
 	unsigned long guest_ds_addr;
 	unsigned long host_ds_addr;
 	unsigned long guest_bts_base;

@@ -220,4 +220,6 @@ vmx.o: vmx.c /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
  /home/Xen/BranchRecoder_XEN/xen/include/asm/hvm/nestedhvm.h \
  /home/Xen/BranchRecoder_XEN/xen/include/asm/guest_pt.h \
  /home/Xen/BranchRecoder_XEN/xen/include/xen/event.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/event.h
+ /home/Xen/BranchRecoder_XEN/xen/include/asm/event.h \
+ /XenSource/BranchRecoder_XEN/xen/arch/x86/mm/hap/private.h \
+ /XenSource/BranchRecoder_XEN/xen/arch/x86/mm/hap/../mm-locks.h

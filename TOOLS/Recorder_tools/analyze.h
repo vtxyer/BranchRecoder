@@ -36,6 +36,7 @@ struct debug_store {
 };
 struct vpmu_data{
 	unsigned long host_domID; 
+	unsigned long host_cr3; 
 	unsigned long host_ds_addr;
 	unsigned long host_bts_base;
 	unsigned long bts_size_order;
@@ -81,6 +82,7 @@ int init_vpmu_data(int domID, struct vpmu_data *vpmu_data, unsigned long bts_siz
 	int bts_enable;
 //	int ret;
 	unsigned long tmp;	
+	unsigned long cr3;
 
 	bts_enable = get_bts_flag(fd, domID);
 	if(bts_enable < 0){
@@ -97,10 +99,7 @@ int init_vpmu_data(int domID, struct vpmu_data *vpmu_data, unsigned long bts_siz
 			return -1;
 		}
 		memset(ds, 0, sizeof(*ds));
-		printf("ds base %lx.Waiting for Input:\n", (unsigned long)ds);
-		scanf("%d", &tmp);
-		vpmu_data->host_ds_addr = tmp; 
-//		vpmu_data->host_ds_addr = (unsigned long)ds; 
+		vpmu_data->host_ds_addr = (unsigned long)ds; 
 
 
 		bts_buffer = memalign(PAGE_SIZE, bts_size_order*PAGE_SIZE);
@@ -110,10 +109,7 @@ int init_vpmu_data(int domID, struct vpmu_data *vpmu_data, unsigned long bts_siz
 			return -1;
 		}
 		memset(bts_buffer, 0, bts_size_order*PAGE_SIZE);
-		printf("bts base %lx.Waiting for Input:\n", (unsigned long)ds);
-		scanf("%d", &tmp);
-		vpmu_data->host_bts_base = tmp;
-//		vpmu_data->host_bts_base = (unsigned long)bts_buffer;
+		vpmu_data->host_bts_base = (unsigned long)bts_buffer;
 
 		/*Send msgs to hypervisor*/
 		sent_vpmu_data(fd, domID, vpmu_data);
