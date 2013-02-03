@@ -65,7 +65,7 @@ extern "C"
 		int ret;
 		privcmd_hypercall_t hyper1 = { 
 			__HYPERVISOR_vt_op, 
-			{ 1, domID, 0, (unsigned long)vpmu_data}
+			{ 1, domID, (vpmu_data->host_domID), (vpmu_data->host_cr3), (unsigned long)vpmu_data}
 		};  
 		ret = ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);
 		

@@ -3121,11 +3121,10 @@ static long hvm_vcpu_op(
 
 
 /*<VT> add*/
-static int hvm_vt_op(int op, int domID, unsigned long arg, unsigned long *argbuf1)
+static unsigned long hvm_vt_op(int op, int domID, unsigned long arg, unsigned long argbuf1, unsigned long argbuf2)
 {
-	return	do_vt_op(op, domID, arg, argbuf1);
+	return	do_vt_op(op, domID, arg, argbuf1, argbuf2);
 }
-
 
 
 
