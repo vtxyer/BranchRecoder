@@ -315,9 +315,9 @@ extern uint32_t
 guest_walk_tables(struct vcpu *v, struct p2m_domain *p2m, unsigned long va,
                   walk_t *gw, uint32_t pfec, mfn_t top_mfn, void *top_map);
 
-
+/*<VT> add*/
 extern uint64_t
-set_1g_guest_tables(struct vcpu *v, walk_t *gw, mfn_t top_mfn, void *top_map);
+set_1g_guest_tables(struct vcpu *v, unsigned long cr3, walk_t *gw);
 
 
 /* Pretty-print the contents of a guest-walk */

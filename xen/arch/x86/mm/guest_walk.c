@@ -396,87 +396,115 @@ set_ad:
 
 #if GUEST_PAGING_LEVELS >= 4 /* 64-bit only... */
 uint64_t
-set_1g_guest_tables(struct vcpu *v, walk_t *gw, mfn_t top_mfn, void *top_map)
+set_1g_guest_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 {
-//    struct domain *d = v->domain;
-//	struct p2m_domain *p2m = d->arch.p2m;
-//
-//	/*pfec initniatiate value need to care*/
-//	uint32_t pfec = 0;
-//
-//
-//	unsigned long i;
-//    p2m_type_t p2mt;
-//    guest_l3e_t *l3p = NULL;
-//    guest_l4e_t *l4p;
-//    uint32_t gflags, mflags, iflags, rc = 0;
-//    int flags;
-////	int ret;
-//	unsigned long va;
-//
-//	unsigned long guest_physical_addr, entry_val = 0;
-//	/*over physical region 1G*/
-//	guest_physical_addr = v->domain->max_pages + 0x40000000;
-//
-//
-//    memset(gw, 0, sizeof(walk_t));
-//	va = 0xffff880000000000;
-//
-//    mflags = mandatory_flags(v, pfec);
-//    iflags = (_PAGE_NX_BIT | _PAGE_INVALID_BITS);
-//    /* Get the l4e from the top level table and check its flags*/
-//    gw->l4mfn = top_mfn;
-//    l4p = (guest_l4e_t *) top_map;
-//    gw->l4e = l4p[guest_l4_table_offset(va)];
-//    gflags = guest_l4e_get_flags(gw->l4e) ^ iflags;
-//    if ( !(gflags & _PAGE_PRESENT) ) {
-//        rc |= _PAGE_PRESENT;
-//        goto out;
-//    }
-//    rc |= ((gflags & mflags) ^ mflags);
-//    /* Map the l3 table */
-//    l3p = map_domain_gfn(p2m, 
-//                         guest_l4e_get_gfn(gw->l4e), 
-//                         &gw->l3mfn,
-//                         &p2mt, 
-//                         &rc); 
-//    if(l3p == NULL){
-//		va = -1;
-//        goto out;
-//	}
-//
-//	for(i=1; i<512; i++){		
-//		/* Get the l3e and check its flags*/
-//		gw->l3e = l3p[i];
-//		gflags = guest_l3e_get_flags(gw->l3e) ^ iflags;
-//		if ( (gflags & _PAGE_PRESENT) ) { //entry exist
-//			continue;
-//		}
-//		else
-//			break;
-//	}
-//
-//	if(!guest_supports_1G_superpages(v)){
-//		printk("<VT> not support 1G superpages\n");
-//		va = -1;
-//		goto out;
-//	}
-//
-//	/*Get entry that not exist gw->l3e*/
-//	flags = (_PAGE_PRESENT|_PAGE_RW|
-//				 _PAGE_ACCESSED| _PAGE_PAT );
-//	entry_val = (guest_physical_addr<<12) | flags;
-//
-//	va = va + guest_physical_addr;
-//
-// out:
-//    if ( l3p ) 
-//    {
-//        unmap_domain_page(l3p);
-//        put_page(mfn_to_page(mfn_x(gw->l3mfn)));
-//    }
-//
-//    return va;
+    struct domain *d = v->domain;
+	struct p2m_domain *p2m = d->arch.p2m;
+	/*pfec initniatiate value need to care*/
+	uint32_t pfec = 0;
+    p2m_type_t p2mt;
+    guest_l3e_t *l3p = NULL;
+    guest_l4e_t *l4p;
+    uint32_t gflags, mflags, iflags, rc = 0;
+    int flags;
+//	int ret;
+	unsigned long va;
+	unsigned long guest_physical_addr, entry_val = 0;
+	unsigned long top_gfn, top_mfn;
+	struct page_info *top_page;
+	void *top_map;
+	unsigned long page_table_gfn_base;
+	
+	
+	/*over physical region 1G*/
+	guest_physical_addr = v->domain->extra_gfn[0];
+	guest_physical_addr <<= 12;
+	page_table_gfn_base = (v->domain->max_pages) + 1;
+	page_table_gfn_base <<= 12;
+
+
+	top_gfn = cr3 >> PAGE_SHIFT;
+	top_page = get_page_from_gfn_p2m(p2m->domain, p2m, top_gfn,
+						&p2mt, NULL, P2M_ALLOC | P2M_UNSHARE);
+	if(!top_page){
+		printk("<VT> set_1g_guest_tables error gfn\n");
+		return -1;
+	}
+	top_mfn = _mfn(page_to_mfn(top_page));
+	top_map = map_domain_page(mfn_x(top_mfn));
+
+
+    memset(gw, 0, sizeof(walk_t));
+	va = 0xffff880000000000 + guest_physical_addr;
+
+
+    mflags = mandatory_flags(v, pfec);
+    iflags = (_PAGE_NX_BIT | _PAGE_INVALID_BITS);
+    /* Get the l4e from the top level table and check its flags*/
+    gw->l4mfn = top_mfn;
+    l4p = (guest_l4e_t *) top_map;
+    gw->l4e = l4p[guest_l4_table_offset(va)];
+    gflags = guest_l4e_get_flags(gw->l4e) ^ iflags;
+    if ( !(gflags & _PAGE_PRESENT) ) {
+        rc |= _PAGE_PRESENT;
+		printk("<VT> level 4 map error\n");
+        goto out;
+    }
+    rc |= ((gflags & mflags) ^ mflags);
+    /* Map the l3 table */
+    l3p = map_domain_gfn(p2m, 
+                         guest_l4e_get_gfn(gw->l4e), 
+                         &gw->l3mfn,
+                         &p2mt, 
+                         &rc); 
+    if(l3p == NULL){
+		va = -1;
+        goto out;
+	}
+
+    if(l3p == NULL)
+        goto out;
+    /* Get the l3e and check its flags*/
+    gw->l3e = l3p[guest_l3_table_offset(va)];
+    gflags = guest_l3e_get_flags(gw->l3e) ^ iflags;
+    if ( (gflags & _PAGE_PRESENT) ) {
+		printk("<VT> set_1g_guest_tables already set level 3 entrys error\n");
+        goto out;
+    }
+
+/*	if(!guest_supports_1G_superpages(v)){
+		printk("<VT> not support 1G superpages\n");
+		va = -1;
+		goto out;
+	}*/
+
+	/*Get entry that not exist gw->l3e*/
+	flags = (_PAGE_PRESENT|_PAGE_RW|
+				 _PAGE_ACCESSED| _PAGE_PAT );
+	entry_val = page_table_gfn_base | flags;
+
+	gw->l3e.l3 = entry_val;
+
+	/*Create page table entry*/
+
+    /* Map the l2 table */
+    l2p = map_domain_gfn(p2m, 
+                         guest_l3e_get_gfn(gw->l3e), 
+                         &gw->l2mfn,
+                         &p2mt, 
+                         &rc); 
+ 
+
+
+	return 1;
+
+ out:
+    if ( l3p ) 
+    {
+        unmap_domain_page(l3p);
+        put_page(mfn_to_page(mfn_x(gw->l3mfn)));
+    }
+
 	return INVALID_GFN;
 }
 
