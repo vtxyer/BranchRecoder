@@ -340,6 +340,8 @@ int p2m_alloc_table(struct p2m_domain *p2m)
     unsigned long gfn = -1UL;
     struct domain *d = p2m->domain;
 
+	printk("<VT> alloc p2m tables\n");
+
     p2m_lock(p2m);
 
     if ( pagetable_get_pfn(p2m_get_pagetable(p2m)) != 0 )
@@ -386,6 +388,9 @@ int p2m_alloc_table(struct p2m_domain *p2m)
         {
             mfn = page_to_mfn(page);
             gfn = get_gpfn_from_mfn(mfn_x(mfn));
+
+			printk("<VT>gfn %lx\n", gfn);
+
             /* Pages should not be shared that early */
             ASSERT(gfn != SHARED_M2P_ENTRY);
             page_count++;
