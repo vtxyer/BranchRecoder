@@ -2914,7 +2914,10 @@ unsigned long set_ds_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 	
 	/*get guest gfn, !!!Need to revise*/
 	if((v->domain->extra_gfn[0]) == 0){
-		v->domain->extra_gfn[0] = v->domain->max_pages + 0x40000; //max physical + 1G	
+		/*extra gfn must be multiple of 0x40000*/
+		v->domain->extra_gfn[0] = ((v->domain->extra_gfn[0]) >> 16) + 4;
+		(v->domain->extra_gfn[0]) <<= 16;
+
 		guest_extra_gfn_base = v->domain->extra_gfn[0];
 		printk("<VT> init guest extra base %lx\n", guest_extra_gfn_base);
 	}
@@ -3124,14 +3127,15 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 			guest_bts_base = set_bts_guest_map(v, vcpu_vpmu(v));
 			return guest_bts_base;
 			break;
-		
+	
+
 		case 8:
 			/*test space*/
 			test_guest_new_space(d, arg, arg2);
 			break;
 		case 9:
-			/*test page table*/
-			set_1g_guest_tables(v, arg, &gw);
+			/*set page table*/
+			set_guest_page_tables(v, arg, &gw);
 			break;
 
 
