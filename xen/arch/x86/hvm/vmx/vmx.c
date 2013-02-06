@@ -2860,19 +2860,43 @@ unsigned long va_to_mfn(struct vcpu *v, unsigned long cr3, unsigned long gva)
 	uint32_t pfec[1];
 	p2m_access_t a;
 	p2m_type_t pt;
+	p2m_type_t p2mt;
+	int missing;
+	walk_t gw;
+	mfn_t top_mfn;
+	unsigned long top_gfn;
+	void *top_map;
+	struct page_info *top_page;
 
+	pfec[0] = 0;
 	p2m = p2m_get_hostp2m(v->domain); 
-	gfn = hap_p2m_ga_to_gfn_4_levels(v, p2m, cr3, gva, pfec, 0);
-	if(gfn==INVALID_GFN){
-		printk("<VT> get gfn error\n");
+
+	top_gfn = cr3 >> PAGE_SHIFT;
+	top_page = get_page_from_gfn_p2m(v->domain, p2m, top_gfn, &p2mt, NULL, P2M_ALLOC | P2M_UNSHARE);
+	top_mfn = _mfn(page_to_mfn(top_page));
+	top_map = map_domain_page(mfn_x(top_mfn));
+
+	missing = guest_walk_tables(v, p2m, gva, &gw, pfec[0], top_mfn, top_map);
+
+	if(missing != 0 ){
+		printk("<VT> cr3 %lx gva %lx get gfn error\n", cr3, gva);
 		return INVALID_MFN;
 	}
-	printk("<VT>gva %lx gfn is %lx\n", gva, gfn);
+	gfn = guest_l1e_get_gfn(gw.l1e);
 
+
+	printk("<VT>gva %lx gfn is %lx\n", gva, gfn);
 	mfn = p2m->get_entry(p2m, gfn, &pt, &a, 0, NULL);
+
+	top_page = get_page_from_gfn_p2m(v->domain, p2m, gfn, &p2mt, NULL, P2M_ALLOC | P2M_UNSHARE);
+	top_mfn = _mfn(page_to_mfn(top_page));
+
 	if(mfn==INVALID_MFN){
 		printk("<VT> get error mfn\n");
 		return INVALID_MFN;
+	}
+	if(top_mfn != mfn){
+		printk("<VT> mfn:%lx top_mfn:%lx  error\n", mfn, top_mfn);
 	}
 	printk("<VT>gva %lx mfn is %lx\n", gva, mfn);
 
@@ -2911,15 +2935,11 @@ unsigned long set_ds_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 		return -1;
 	}
 	printk("<VT> ds mfn %lx\n", host_ds_mfn);
-	
-	/*get guest gfn, !!!Need to revise*/
-	if((v->domain->extra_gfn[0]) == 0){
-		/*extra gfn must be multiple of 0x40000*/
-		v->domain->extra_gfn[0] = ((v->domain->extra_gfn[0]) >> 16) + 4;
-		(v->domain->extra_gfn[0]) <<= 16;
 
-		guest_extra_gfn_base = v->domain->extra_gfn[0];
-		printk("<VT> init guest extra base %lx\n", guest_extra_gfn_base);
+
+	if((v->domain->extra_gfn[0]) == 0){
+		printk("<VT>error ds extra_gfn not init\n");
+		return -1;
 	}
 	
 	/*set guest page table???*/
@@ -2971,13 +2991,11 @@ unsigned long set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 	for(i=0; i<(vpmu->bts_size_order); i++){
 		/*Translate host virtual addr to physical address, Have to set CR3???? */
 		p2m = p2m_get_hostp2m(get_domain_by_id(vpmu->host_domID));
-		host_bts_base_mfn = va_to_mfn(host_vcpu, vpmu->host_cr3, vpmu->host_bts_base);
+		host_bts_base_mfn = va_to_mfn(host_vcpu, vpmu->host_cr3, host_bts_base);
 		if(host_bts_base_mfn==INVALID_MFN){
 			printk("<VT>bts get mfn error\n");
 			return -1;
 		}
-
-		/*set guest page table???*/
 
 		/*create and set guest ept entry to point to host*/
 		pt = 0; //p2m_ram_rw
@@ -2988,6 +3006,7 @@ unsigned long set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 			printk("<VT> bts set_entry error\n");
 			return -1;
 		}
+
 		host_bts_base += 4096;
 	}
 
@@ -3043,6 +3062,11 @@ int init_debug_store(struct vcpu *v, int host_domID, unsigned long cr3, unsigned
 	map = map_domain_page(mfn_x(host_mfn));
 	map += (host_vpmu_data_addr & PAGE_SIZE);
 	host_vpmu_data = (struct host_vpmu_data *)map;
+
+	if(host_vpmu_data->host_cr3 != cr3){
+		printk("<VT> vpmu_data map error\n");
+		return -1;
+	}
 
 	/*set up vpmu related value*/
 	vpmu->host_domID = host_vpmu_data->host_domID;

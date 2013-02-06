@@ -423,11 +423,19 @@ static unsigned long get_free_page_gaddr(struct domain *d, unsigned long cr3, un
 	top_mfn = _mfn(page_to_mfn(top_page));
 	top_map = map_domain_page(mfn_x(top_mfn));
 
+	
+//	target_gfn += 0x1000;
 	do{
+		target_gfn -= 0x1000;
 		pfec[0] = 0;
 		va = (target_gfn<<12);
 		missing = guest_walk_tables(d->vcpu[0], p2m, va, &gw, pfec[0], top_mfn, top_map);
-		target_gfn -= 0x1000;
+	
+		/*!!!!!!!!!!!!!!!!!!!!!!!*/
+//		if(target_gfn < 0x30fff)
+//			break;
+		missing = 0;			
+
 	}while(missing != 0);
 
 	va = target_gfn + 0xfff;
@@ -459,9 +467,12 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 	int i;
 	
 	
-	/*over physical region 1G !!!NEED to revise*/
+	/*extra gfn must be multiple of 0x40000 !!!NEED to revise*/
+	v->domain->extra_gfn[0] = ((v->domain->max_pages) >> 16) + 4;
+	(v->domain->extra_gfn[0]) <<= 16;
 	guest_physical_addr = v->domain->extra_gfn[0];
 	guest_physical_addr <<= 12;
+	printk("<VT> init guest extra base %lx\n", guest_physical_addr);
 
 
 	/*steal free pages from already mapping page and !!!???make that page without any ept privilige???*/
@@ -529,17 +540,22 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 
     /* Map the l2 table */
     l2p = map_domain_gfn(p2m, 
-                         guest_l3e_get_gfn(gw->l3e), 
+                         (page_table_base_addr>>12), 
                          &gw->l2mfn,
                          &p2mt, 
                          &rc);
+	if(l2p == NULL){
+		printk("<VT> cannot map l2p error\n");
+		goto out;
+	}
 	/*NEED to revise*/
 	flags = 0x1e3;						 
     /* Set the l2e */
 	for(i=0; i<512; i++){
 		entry_val = guest_physical_addr | flags; 
-	    l2p[i].l2 = entry_val;
-		guest_physical_addr += 0x1000;
+		printk("<VT> entry_val: %lx\n", entry_val);
+	    l2p[i].l2 = entry_val;		
+		guest_physical_addr += 0x1000000;
 	}
  
 
