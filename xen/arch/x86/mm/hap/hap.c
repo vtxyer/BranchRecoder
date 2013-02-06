@@ -584,7 +584,9 @@ int hap_enable(struct domain *d, u32 mode)
     {
         unsigned int r;
         paging_lock(d);
-        r = hap_set_allocation(d, 256, NULL);
+		/*<VT> add*/
+        //r = hap_set_allocation(d, 256, NULL);
+        r = hap_set_allocation(d, 1024, NULL);
         if ( r != 0 )
         {
             hap_set_allocation(d, 0, NULL);
