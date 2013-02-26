@@ -2934,13 +2934,12 @@ unsigned long set_ds_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 		printk("<VT>ds get mfn %lx error\n", host_ds_mfn);
 		return -1;
 	}
-	printk("<VT> ds mfn %lx\n", host_ds_mfn);
-
 
 	if((v->domain->extra_gfn[0]) == 0){
 		printk("<VT>error ds extra_gfn not init\n");
 		return -1;
 	}
+	guest_extra_gfn_base = (v->domain->extra_gfn[0]);
 	
 	/*set guest page table???*/
 	
@@ -2958,12 +2957,15 @@ unsigned long set_ds_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 	/*set ds guest address*/
 	vpmu->guest_ds_addr = (guest_va_base | (guest_extra_gfn_base<<12) | (vpmu->host_ds_addr & PAGE_SIZE) );
 	
+	printk("<VT> set ds ok host_ds_addr:%lx host_mfn:%lx guest_ds_addr:%lx\n", 
+				vpmu->host_ds_addr, host_ds_mfn, vpmu->guest_ds_addr);
+
 	return vpmu->guest_ds_addr;
 }
 unsigned long set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 {
 	struct p2m_domain *p2m;
-	unsigned long host_bts_base_mfn;
+	unsigned long host_bts_base_mfn = 0;
 	unsigned long guest_extra_gfn_base;
 	//uint32_t pfec = PFEC_page_present;
 	struct vcpu *host_vcpu;
@@ -3012,32 +3014,10 @@ unsigned long set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 
 	/*set ds guest address*/
 	vpmu->guest_bts_base = (guest_va_base | ((guest_extra_gfn_base+1)<<12) );
+	printk("<VT> set bts ok host_bts_addr:%lx host_mfn:%lx guest_bts_addr:%lx\n", 
+				vpmu->host_bts_base, host_bts_base_mfn, vpmu->guest_bts_base);
 
 	return vpmu->guest_bts_base;
-}
-
-int test_guest_new_space(struct domain *d, unsigned long gfn, unsigned long mfn)
-{
-	struct p2m_domain *p2m;
-	int ret;
-	p2m_access_t a;
-	p2m_type_t pt;
-	unsigned long new_mfn;
-
-	pt = 0; //p2m_ram_rw
-	a = 3; //p2m_access_rw
-	p2m = p2m_get_hostp2m(d);
-	ret = p2m->set_entry(p2m, gfn, mfn, PAGE_ORDER_4K, pt, a);
-	if(ret==0){
-		printk("<VT> set_entry error\n");
-		return -1;
-	}
-	new_mfn = p2m->get_entry(p2m, gfn, &pt, &a, 0, NULL);
-
-	if(new_mfn != mfn){
-		printk("<VT>Diff new_mfn:%lx mfn:%lx\n", new_mfn, mfn);
-	}
-	return 1;
 }
 
 
@@ -3092,7 +3072,6 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 	unsigned long guest_bts_base;
 	walk_t gw;
 
-
 	if(d == NULL){
 		printk("Wrong domain ID\n");
 		return -1;
@@ -3106,7 +3085,6 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 			/*get bts_enable value*/
 			return vcpu_vpmu(v)->bts_enable; 
 			break;
-
 		case 1:
 			/*Init debug register*/
 //			for_each_vcpu(d, v){
@@ -3116,32 +3094,29 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 //			}
 			break;
 
-
-//		case 2:
-//			/*start BTS tracing*/
-//			if(vcpu_vpmu(v)->bts_enable >= 1){
-//				vcpu_vpmu(v)->bts_enable = 2;
+		case 2:
+			/*start BTS tracing*/
+			if(vcpu_vpmu(v)->bts_enable >= 1){
+				vcpu_vpmu(v)->bts_enable = 2;
+			}
+			break;
+		case 3:
+			/*stop BTS tracing*/
+//			if(vcpu_vpmu(v)->bts_enable == 2){
+				vcpu_vpmu(v)->bts_enable = 3;
 //			}
-//			break;
-//		case 3:
-//			/*stop BTS tracing*/
-////			if(vcpu_vpmu(v)->bts_enable == 2){
-//				vcpu_vpmu(v)->bts_enable = 3;
-////			}
-//			break;
+			break;
+
+		case 4:
+			/*test event channel*/
+			if(arg == 0){
+				set_global_virq_handler(d, 20);
+			}
+			else 
+				send_global_virq(20);
+			break;
 
 
-//		case 4:
-//			/*test event channel*/
-//			if(arg == 0){
-//				set_global_virq_handler(d, 20);
-//			}
-//			else 
-//				send_global_virq(20);
-//			break;
-//
-//
-//
 		case 6:
 			/*set ds map*/
 			return set_ds_guest_map(v, vcpu_vpmu(v));
@@ -3153,15 +3128,10 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 			break;
 	
 
-		case 8:
-			/*test space*/
-			test_guest_new_space(d, arg, arg2);
-			break;
 		case 9:
 			/*set page table*/
 			set_guest_page_tables(v, arg, &gw);
 			break;
-
 
 
 		default:

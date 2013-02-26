@@ -1190,8 +1190,6 @@ void vmx_do_resume(struct vcpu *v)
 
     hvm_do_resume(v);
 
-
-
 	/*<VT> add*/
 	if(vcpu_vpmu(v)->bts_enable > 1 && vcpu_vpmu(v)->bts_enable < 5){
 		if(vcpu_vpmu(v)->bts_enable == 2){
@@ -1219,8 +1217,7 @@ void vmx_do_resume(struct vcpu *v)
 			}
 
 			/*NOTE: Remember to free debug store*/
-			/**/
-			vcpu_vpmu(v)->bts_enable = 0;
+			vcpu_vpmu(v)->bts_enable = 1;
 
 			printk("<VT> stop tracing\n");
 		}

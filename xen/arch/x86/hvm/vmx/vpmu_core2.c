@@ -38,6 +38,11 @@
 #include <asm/hvm/vpmu.h>
 #include <asm/hvm/vmx/vpmu_core2.h>
 
+
+/*<VT> add*/
+#include <public/event_channel.h>
+#include <xen/event.h>
+
 /*
  * QUIRK to workaround an issue on Nehalem processors currently seen
  * on family 6 cpus E5520 (model 26) and X7542 (model 46).
@@ -698,6 +703,12 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
 
 		/*<VT> add Hypervisor BTS so don't need to set vlapic return 1*/
 		if(vpmu->bts_enable == 2){
+
+			/*Just for test*/
+			set_global_virq_handler(current->domain, 20);
+			vpmu->bts_enable = 3;
+
+
 			return 1;
 		}
     }
