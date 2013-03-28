@@ -1,12 +1,12 @@
-stub.o: stub.c /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/compiler.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/efi.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/types.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/types.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/errno.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/init.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/init.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/bug.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/x86_64/bug.h
+stub.o: stub.c /XenSource/BranchRecoder_XEN/xen/include/xen/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/compiler.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/efi.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/types.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/types.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/errno.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/init.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/init.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/bug.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/x86_64/bug.h

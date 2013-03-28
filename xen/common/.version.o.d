@@ -1,5 +1,6 @@
-version.o: version.c /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/compiler.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/compile.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/version.h
+version.o: version.c \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/compiler.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/compile.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/version.h

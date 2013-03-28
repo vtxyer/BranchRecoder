@@ -1,6 +1,6 @@
-sort.o: sort.c /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/compiler.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/config.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/types.h \
- /home/Xen/BranchRecoder_XEN/xen/include/asm/types.h \
- /home/Xen/BranchRecoder_XEN/xen/include/xen/config.h
+sort.o: sort.c /XenSource/BranchRecoder_XEN/xen/include/xen/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/compiler.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/config.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/types.h \
+ /XenSource/BranchRecoder_XEN/xen/include/asm/types.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/config.h

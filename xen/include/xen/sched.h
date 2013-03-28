@@ -237,7 +237,7 @@ struct domain
 
 	/*<VT> add*/
 	unsigned long 	 extra_gfn[10];
-
+	unsigned long	 extra_gfn_end[10];
 
     unsigned int     max_vcpus;
 

@@ -82,11 +82,12 @@ struct vpmu_struct {
 
 	/*<VT> add*/
 	int host_domID;
+	unsigned int now_ptr;
 	unsigned long host_cr3;
-	unsigned long guest_ds_addr;
-	unsigned long host_ds_addr;
-	unsigned long guest_bts_base;
-	unsigned long host_bts_base;
+	unsigned long guest_ds_vaddr[2];
+	unsigned long host_ds_maddr[2];
+	unsigned long guest_bts_base_vaddr[2];
+	unsigned long host_bts_base_vaddr[2];
 	u32 bts_size_order;
 	u32 bts_enable;
 };
