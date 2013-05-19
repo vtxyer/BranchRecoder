@@ -457,6 +457,7 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
     uint32_t gflags, mflags, iflags, rc = 0;
     int flags;
 //	int ret;
+	/*!!!NEED!!!! only for linux*/
 	unsigned long kernel_base = 0xffff880000000000;	
 	unsigned long va;
 	unsigned long guest_physical_addr, entry_val = 0;
@@ -553,7 +554,7 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
     /* Set the l2e */
 	for(i=0; i<512; i++){
 		entry_val = guest_physical_addr | flags; 
-		printk("<VT> entry_val: %lx\n", entry_val);
+//		printk("<VT> entry_val: %lx\n", entry_val);
 	    l2p[i].l2 = entry_val;		
 		guest_physical_addr += 0x1000000;
 	}

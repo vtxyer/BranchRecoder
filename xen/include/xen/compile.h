@@ -1,9 +1,9 @@
-#define XEN_COMPILE_DATE	"Thu Mar 28 15:55:14 CET 2013"
-#define XEN_COMPILE_TIME	"15:55:14"
+#define XEN_COMPILE_DATE	"Sun May 19 19:05:26 CEST 2013"
+#define XEN_COMPILE_TIME	"19:05:27"
 #define XEN_COMPILE_BY		"root"
 #define XEN_COMPILE_DOMAIN	"(none)"
 #define XEN_COMPILE_HOST	"ASUS_SERVER"
-#define XEN_COMPILER		"gcc (GCC) 4.4.6 20120305 (Red Hat 4.4.6-4)"
+#define XEN_COMPILER		"gcc (GCC) 4.4.7 20120313 (Red Hat 4.4.7-3)"
 
 #define XEN_VERSION		4
 #define XEN_SUBVERSION		2

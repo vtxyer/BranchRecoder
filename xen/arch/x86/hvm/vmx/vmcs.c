@@ -178,7 +178,8 @@ static int vmx_init_vmcs_config(void)
     if ( _vmx_cpu_based_exec_control & CPU_BASED_ACTIVATE_SECONDARY_CONTROLS )
     {
         min = 0;
-        opt = (SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES |
+        opt = (
+			   SECONDARY_EXEC_VIRTUALIZE_APIC_ACCESSES |
                SECONDARY_EXEC_WBINVD_EXITING |
                SECONDARY_EXEC_ENABLE_EPT |
                SECONDARY_EXEC_ENABLE_RDTSCP |
@@ -1081,6 +1082,20 @@ static void wbinvd_ipi(void *info)
 
 
 /*<VT> add*/
+#define MAX_PEBS_EVENTS      8
+struct debug_store {
+	u64	bts_buffer_base;
+	u64	bts_index;
+	u64	bts_absolute_maximum;
+	u64	bts_interrupt_threshold;
+	u64	pebs_buffer_base;
+	u64	pebs_index;
+	u64	pebs_absolute_maximum;
+	u64	pebs_interrupt_threshold;
+	u64	pebs_event_reset[MAX_PEBS_EVENTS];
+};
+
+
 int write_ds_msr(struct vcpu *v, int op)
 {
 	struct vpmu_struct *vpmu;
@@ -1127,14 +1142,45 @@ int write_dectl_msr(struct vcpu *v, int op)
 }
 
 
+void stop_bts(struct vcpu *v){
+	struct vpmu_struct *vpmu;
+	int i;
+	void *ds_map;
+	struct debug_store *ds;
+	int ret;
+	
+	printk("<VT> stop BTS tracing\n");
+	ret = write_dectl_msr(v, 0);
+	if(ret < 0)
+		printk("<VT> assign DS_AREA error\n");
+	else{
+		ret = write_ds_msr(v, 0);
+		if(ret < 0)
+			printk("<VT> assign DEBUGCTLMSR error\n");
+	}
 
+	/*NOTE: Remember to free debug store*/
+	vcpu_vpmu(v)->bts_enable = 1;
+	vpmu = vcpu_vpmu(v);
+	for(i=0; i<2; i++){
+		ds_map = map_domain_page(mfn_x( (vpmu->host_ds_maddr[i])));
+		if(ds_map == NULL){
+			printk("<VT> Map error when Fill ds info\n");
+			return;
+		}
+//		ds_map += ((vpmu->host_ds_maddr[i]) & PAGE_SIZE);
+		ds = (struct debug_store *)ds_map;
+        ds->bts_index = ds->bts_buffer_base;
+	}
+
+	printk("<VT> stop tracing\n");
+}
 
 
 void vmx_do_resume(struct vcpu *v)
 {
     bool_t debug_state;
 	int ret;
-
 
     if ( v->arch.hvm_vmx.active_cpu == smp_processor_id() )
     {
@@ -1191,7 +1237,6 @@ void vmx_do_resume(struct vcpu *v)
 	/*<VT> add*/
 	if(vcpu_vpmu(v)->bts_enable > 1 && vcpu_vpmu(v)->bts_enable < 5){
 		if(vcpu_vpmu(v)->bts_enable == 2){
-			printk("<VT> start BTS tracing\n");
 			ret = write_ds_msr(v, 1);
 			if(ret < 0)
 				printk("<VT> assign DS_AREA error\n");
@@ -1201,25 +1246,23 @@ void vmx_do_resume(struct vcpu *v)
 					printk("<VT> assign DEBUGCTLMSR error\n");
 			}
 			vcpu_vpmu(v)->bts_enable = 1;
-			printk("<VT> start tracing\n");
+			printk("<VT> start BTS tracing\n");
 		}
 		if(vcpu_vpmu(v)->bts_enable == 3){
-			printk("<VT> stop BTS tracing\n");
-			ret = write_dectl_msr(v, 0);
-			if(ret < 0)
-				printk("<VT> assign DS_AREA error\n");
-			else{
-				ret = write_ds_msr(v, 0);
-				if(ret < 0)
-					printk("<VT> assign DEBUGCTLMSR error\n");
-			}
-
-			/*NOTE: Remember to free debug store*/
-			vcpu_vpmu(v)->bts_enable = 1;
-
-			printk("<VT> stop tracing\n");
+			stop_bts(v);
 		}
 	}
+
+	if(v->domain->cr3_monitor_flag == 1){
+		v->arch.debugreg[7] |= 0x2;
+	}
+	else if(v->domain->cr3_monitor_flag == 0){
+		v->arch.debugreg[7] = 0; 
+	}
+
+
+
+
 
     reset_stack_and_jump(vmx_asm_do_vmentry);
 }

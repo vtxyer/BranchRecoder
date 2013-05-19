@@ -238,6 +238,8 @@ struct domain
 	/*<VT> add*/
 	unsigned long 	 extra_gfn[10];
 	unsigned long	 extra_gfn_end[10];
+	unsigned long	 cr3_monitor_flag; 
+
 
     unsigned int     max_vcpus;
 

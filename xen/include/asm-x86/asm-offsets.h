@@ -38,8 +38,8 @@
 #define UREGS_kernel_sizeof 168 /* offsetof(struct cpu_user_regs, es) */
 #define UREGS_user_sizeof 200 /* sizeof(struct cpu_user_regs) */
 
-#define irq_caps_offset 632 /* offsetof(struct domain, irq_caps) */
-#define next_in_list_offset 264 /* offsetof(struct domain, next_in_list) */
+#define irq_caps_offset 640 /* offsetof(struct domain, irq_caps) */
+#define next_in_list_offset 272 /* offsetof(struct domain, next_in_list) */
 #define VCPU_processor 4 /* offsetof(struct vcpu, processor) */
 #define VCPU_domain 16 /* offsetof(struct vcpu, domain) */
 #define VCPU_vcpu_info 8 /* offsetof(struct vcpu, vcpu_info) */

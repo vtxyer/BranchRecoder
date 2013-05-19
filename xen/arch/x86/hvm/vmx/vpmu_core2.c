@@ -696,19 +696,21 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     else
     {
         /* No PMC overflow but perhaps a Trace Message interrupt. */
+		printk("<VT> BTS Interrupt bts_enable:%u\n", vpmu->bts_enable);
+
         msr_content = __vmread(GUEST_IA32_DEBUGCTL);
-        if ( !(msr_content & IA32_DEBUGCTLMSR_TR) )
+        if ( !(msr_content & IA32_DEBUGCTLMSR_TR) ){
+			printk("<VT> BTS into end\n");
             return 0;
-		printk("<VT> into core2_vpmu_do_interrupt Trace Message interrupt region\n");
+		}
+
+		return 0;
 
 		/*<VT> add Hypervisor BTS so don't need to set vlapic return 1*/
 		if(vpmu->bts_enable == 2){
-
 			/*Just for test*/
 			set_global_virq_handler(current->domain, 20);
 			vpmu->bts_enable = 3;
-
-
 			return 1;
 		}
     }
