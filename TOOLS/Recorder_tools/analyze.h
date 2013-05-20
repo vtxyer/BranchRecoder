@@ -15,14 +15,19 @@ extern "C"{
 //#include <xen/hvm/save.h>
 #include <setjmp.h>
 #include <malloc.h>
+#include <signal.h>
 }
 #include <map>
 using namespace std;
 
 typedef unsigned long u64;
-#define PAGE_SIZE 4096
+#define PAGE_SIZE 			4096
 #define BTS_RECORD_SIZE		24
 #define MAX_PEBS_EVENTS      8
+#define MAX_CPU				24
+
+int fd, guest_domID;
+struct vpmu_data *vpmu_data;
 struct debug_store {
 	u64	bts_buffer_base;
 	u64	bts_index;
@@ -37,10 +42,22 @@ struct debug_store {
 struct vpmu_data{
 	unsigned long host_domID; 
 	unsigned long host_cr3; 
-	unsigned long host_ds_addr;
-	unsigned long host_bts_base;
+	unsigned long host_ds_addr[2];
+	unsigned long host_bts_base[2];
 	unsigned long bts_size_order;
 };
+struct Bts_record {
+    u64 from;
+    u64 to;
+    u64 flags;
+};
+struct Node_val{
+	struct debug_store *ds;
+	struct Bts_record *bts;
+	int waring;
+};
+struct Node_val data_base[24];
+
 
 extern "C"
 {
@@ -74,8 +91,35 @@ extern "C"
 		
 		return ret;
 	}
-
-	int set_ds_guest_map(int fd, int domID){
+	void va_to_mfn(int fd, int domID, unsigned long cr3, unsigned long gva){
+		privcmd_hypercall_t hyper1 = { 
+			__HYPERVISOR_vt_op, 
+			{ 5, domID, cr3, gva, 0}
+		};  
+		ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);	
+	}
+	void clean_vpmu(int fd, int _guest_domID){
+		privcmd_hypercall_t hyper1 = { 
+			__HYPERVISOR_vt_op, 
+			{ 6, _guest_domID, 0, 0, 0}
+		};  
+		ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);		
+	}
+	void set_ept(int fd, int _guest_domID, int _host_domID, unsigned long _host_cr3, unsigned long _va){
+		privcmd_hypercall_t hyper1 = { 
+			__HYPERVISOR_vt_op, 
+			{ 9, _guest_domID, _host_domID, _host_cr3, _va}
+		};  
+		ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);		
+	}
+	void set_guest_page_table(int fd, int _guest_domID, unsigned long _guest_cr3){
+		privcmd_hypercall_t hyper1 = { 
+			__HYPERVISOR_vt_op, 
+			{ 9, _guest_domID, _guest_cr3, 0, 0}
+		};  
+		ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);		
+	}
+/*	int set_ds_guest_map(int fd, int domID){
 		int ret;
 		privcmd_hypercall_t hyper1 = { 
 			__HYPERVISOR_vt_op, 
@@ -93,20 +137,23 @@ extern "C"
 		};  
 		ret = ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);
 		return buf[0];
-	}
+	}*/
 }                                    
 
 
-int init_vpmu_data(int domID, struct vpmu_data *vpmu_data, unsigned long bts_size_order, int fd)
+void end_process(int errno){
+	clean_vpmu(fd, guest_domID);
+    exit(errno);
+}
+
+int init_vpmu_data(int domID, struct vpmu_data *vpmu_data, unsigned long bts_size_order, int fd, unsigned long host_cr3)
 {
-	struct debug_store *ds;
 	void *bts_buffer;
 	int bts_enable;
-    int max, thresh;
-    unsigned long buffer_size;
 	unsigned long ret;
 	unsigned long tmp;	
-	unsigned long cr3;
+	int now_data_base_ptr = 0;
+	struct debug_store *ds;
 
 	bts_enable = get_bts_flag(fd, domID);
 	if(bts_enable < 0){
@@ -117,64 +164,42 @@ int init_vpmu_data(int domID, struct vpmu_data *vpmu_data, unsigned long bts_siz
 	if(1){	
 		vpmu_data->bts_size_order = bts_size_order;
 
-		printf("Pid %d Input cr3: ", getpid());
-		scanf("%lx", &cr3);
-		vpmu_data->host_cr3 = cr3;
-
+		vpmu_data->host_cr3 = host_cr3;
 
 		/*alloc debug store register*/
-		ds = (struct debug_store *)memalign(PAGE_SIZE, PAGE_SIZE);	
-		if(ds == NULL){
-			printf("<VT> ds alloc error\n");
-			return -1;
+		for(int k=0; k<2; k++){
+			//each vpmu have two bts info
+			data_base[now_data_base_ptr].ds = (struct debug_store *)memalign(PAGE_SIZE, PAGE_SIZE);	
+			ds = data_base[now_data_base_ptr].ds;
+			if(ds == NULL){
+				printf("<VT> ds alloc error\n");
+				return -1;
+			}
+			memset(ds, 0, sizeof(*ds));
+			vpmu_data->host_ds_addr[k] = (unsigned long)ds; 
+
+			bts_buffer = memalign(PAGE_SIZE, bts_size_order*PAGE_SIZE);
+			if(bts_buffer == NULL)
+			{
+				printf("<VT> bts buffer alloc error\n");
+				return -1;
+			}
+			memset(bts_buffer, 1, bts_size_order*PAGE_SIZE);
+			memset(bts_buffer, 0, bts_size_order*PAGE_SIZE);
+			vpmu_data->host_bts_base[k] = (unsigned long)bts_buffer;
+			data_base[now_data_base_ptr].bts = (struct Bts_record *)bts_buffer;
+
+			/*0x123 for check in hypervisor map success or not*/
+			data_base[now_data_base_ptr].ds->bts_buffer_base = 0x123;
+
+			now_data_base_ptr++;
 		}
-		memset(ds, 0, sizeof(*ds));
-		vpmu_data->host_ds_addr = (unsigned long)ds; 
 
 
-		bts_buffer = memalign(PAGE_SIZE, bts_size_order*PAGE_SIZE);
-		if(bts_buffer == NULL)
-		{
-			printf("<VT> bts buffer alloc error\n");
-			return -1;
-		}
-		memset(bts_buffer, 0, bts_size_order*PAGE_SIZE);
-		vpmu_data->host_bts_base = (unsigned long)bts_buffer;
-
+		/*Clean first*/
+		clean_vpmu(fd, guest_domID);
 		/*Send msgs to hypervisor*/
 		sent_vpmu_data(fd, domID, vpmu_data);
-
-
-		/*Set ds*/
-		buffer_size = PAGE_SIZE*(vpmu_data->bts_size_order);   
-		max = buffer_size / BTS_RECORD_SIZE;
-		thresh = max;
-
-
-		printf("init vpmu ok waiting for input\n");
-		scanf("%d", &cr3);
-
-		ret = set_ds_guest_map(fd, domID);
-		if(ret==-1){
-			printf("set_ds_guest_map error %lx\n", ret);
-			return -1;
-		}
-
-		printf("init ds ok waiting for input\n");
-		scanf("%d", &cr3);
-
-
-		ds->bts_buffer_base = set_bts_guest_map(fd, domID);
-		if(ds->bts_buffer_base == -1){
-			printf("set_bts_guest_map error\n");
-			return -1;
-		}
-
-		ds->bts_index = ds->bts_buffer_base;
-		ds->bts_absolute_maximum = ds->bts_buffer_base +
-			max * BTS_RECORD_SIZE;
-		ds->bts_interrupt_threshold = ds->bts_buffer_base + 
-			thresh * BTS_RECORD_SIZE;
 
 
 		bts_enable = get_bts_flag(fd, domID);
