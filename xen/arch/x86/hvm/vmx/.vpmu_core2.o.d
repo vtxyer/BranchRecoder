@@ -202,6 +202,7 @@ vpmu_core2.o: vpmu_core2.c \
  /XenSource/BranchRecoder_XEN/xen/include/public/sched.h \
  /XenSource/BranchRecoder_XEN/xen/include/public/event_channel.h \
  /XenSource/BranchRecoder_XEN/xen/include/asm/hvm/vmx/vpmu_core2.h \
+ /XenSource/BranchRecoder_XEN/xen/include/xen/domain_page.h \
  /XenSource/BranchRecoder_XEN/xen/include/xen/event.h \
  /XenSource/BranchRecoder_XEN/xen/include/xen/softirq.h \
  /XenSource/BranchRecoder_XEN/xen/include/asm/softirq.h \

@@ -40,6 +40,7 @@
 
 
 /*<VT> add*/
+#include <xen/domain_page.h>
 #include <public/event_channel.h>
 #include <xen/event.h>
 
@@ -418,7 +419,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
             uint64_t supported = IA32_DEBUGCTLMSR_TR | IA32_DEBUGCTLMSR_BTS |
                                  IA32_DEBUGCTLMSR_BTINT;
 
-			printk("<VT> init DEBUGCTLMSR %lx\n", msr_content);
             if ( cpu_has(&current_cpu_data, X86_FEATURE_DSCPL) ){
                 supported |= IA32_DEBUGCTLMSR_BTS_OFF_OS |
                              IA32_DEBUGCTLMSR_BTS_OFF_USR;
@@ -426,7 +426,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
             if ( msr_content & supported )
             {
                 if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_BTS) ){
-					printk("<VT> core2_vpmu_do_wrmsr into VPMU_CPU_HAS_BTS\n");
                     return 1;
 				}
                 gdprintk(XENLOG_WARNING, "Debug Store is not supported on this cpu\n");
@@ -450,7 +449,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
         hvm_inject_hw_exception(TRAP_gp_fault, 0);
         return 1;
     case MSR_IA32_PEBS_ENABLE:
-		printk("<VT> try to enable pebs\n");
         if ( msr_content & 1 )
             gdprintk(XENLOG_WARNING, "Guest is trying to enable PEBS, "
                      "which is not supported.\n");
@@ -466,7 +464,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
                 hvm_inject_hw_exception(TRAP_gp_fault, 0);
                 return 1;
             }
-			printk("<VT> core2_vpmu_do_wrmsr into   case MSR_IA32_DS_AREA:\n");
             core2_vpmu_cxt->pmu_enable->ds_area_enable = msr_content ? 1 : 0;
             break;
         }
@@ -505,7 +502,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
         }
         break;
     default:
-//		printk("<VT> into default\n");
         tmp = msr - MSR_P6_EVNTSEL0;
         vmx_read_guest_msr(MSR_CORE_PERF_GLOBAL_CTRL, &global_ctrl);
         if ( tmp >= 0 && tmp < core2_get_pmc_count() )
@@ -519,7 +515,6 @@ static int core2_vpmu_do_wrmsr(unsigned int msr, uint64_t msr_content){
         pmu_enable |= core2_vpmu_cxt->pmu_enable->arch_pmc_enable[i];
     pmu_enable |= core2_vpmu_cxt->pmu_enable->ds_area_enable;
     if ( pmu_enable ){
-//		printk("<VT> vpmu is running\n");
         vpmu_set(vpmu, VPMU_RUNNING);
 	}
     else
@@ -605,7 +600,6 @@ static int core2_vpmu_do_rdmsr(unsigned int msr, uint64_t *msr_content)
         if ( msr == MSR_IA32_MISC_ENABLE )
         {
             if ( vpmu_is_set(vpmu, VPMU_CPU_HAS_BTS) ){
-				printk("<VT>core2_vpmu_do_rdmsr into VPMU_CPU_HAS_BTS\n");
                 *msr_content &= ~MSR_IA32_MISC_ENABLE_BTS_UNAVAIL;
 			}
         }
@@ -671,17 +665,57 @@ static void core2_vpmu_do_cpuid(unsigned int input,
 //}
 //
 
+#define BTS_RECORD_SIZE		24
+#define MAX_PEBS_EVENTS      8
+#define PMI_VIRQ			20
+
+struct debug_store {
+	u64	bts_buffer_base;
+	u64	bts_index;
+	u64	bts_absolute_maximum;
+	u64	bts_interrupt_threshold;
+	u64	pebs_buffer_base;
+	u64	pebs_index;
+	u64	pebs_absolute_maximum;
+	u64	pebs_interrupt_threshold;
+	u64	pebs_event_reset[MAX_PEBS_EVENTS];
+};
+int switch_bts_buffer(struct vcpu *v, struct vpmu_struct *vpmu){
+	void *ds_map;
+	struct debug_store *ds;
+	unsigned int i;
+
+	for(i=0; i<2; i++){
+		ds_map = map_domain_page(mfn_x( (vpmu->host_ds_maddr[0]) ));
+		if(ds_map == NULL){
+			printk("<VT> Map error when Fill ds info\n");
+			return -1;
+		}	
+		ds = (struct debug_store *)ds_map;
+		if(ds->bts_index != ds->bts_interrupt_threshold){
+			vpmu->now_ptr = i;
+			break;
+		}
+
+		if(i==1){
+			printk("<VT> not found available buffer to store !!!NEED to rewrite!!!\n");
+		}
+	}
+
+	return 0;
+}
 
 
 static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
 {
-    struct vcpu *v = current;
+    struct vcpu *v = current, *tmpV;
     u64 msr_content;
     u32 vlapic_lvtpc;
     unsigned char int_vec;
     struct vpmu_struct *vpmu = vcpu_vpmu(v);
     struct core2_vpmu_context *core2_vpmu_cxt = vpmu->context;
     struct vlapic *vlapic = vcpu_vlapic(v);
+	int ret;
 
     rdmsrl(MSR_CORE_PERF_GLOBAL_STATUS, msr_content);
     if ( msr_content )
@@ -695,23 +729,26 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     }
     else
     {
-        /* No PMC overflow but perhaps a Trace Message interrupt. */
-		printk("<VT> BTS Interrupt bts_enable:%u\n", vpmu->bts_enable);
-
-        msr_content = __vmread(GUEST_IA32_DEBUGCTL);
-        if ( !(msr_content & IA32_DEBUGCTLMSR_TR) ){
-			printk("<VT> BTS into end\n");
-            return 0;
+		/*<VT>add*/
+		printk("<VT> BTS Interrupt Catched bts_enable:%u\n", vpmu->bts_enable);
+		ret = switch_bts_buffer(v, vpmu);
+		if(ret == -1){
+			printk("<VT> catche BTS interrupt proceed error\n");
+			for_each_vcpu(v->domain, tmpV){
+				vcpu_vpmu(tmpV)->bts_enable = 3;
+			}
+			return 0;
 		}
-
+		vpmu->bts_enable = 2;
+		/*Sent VIRQ to Monitor Dom*/
+		set_global_virq_handler(v->domain, PMI_VIRQ);
 		return 0;
 
-		/*<VT> add Hypervisor BTS so don't need to set vlapic return 1*/
-		if(vpmu->bts_enable == 2){
-			/*Just for test*/
-			set_global_virq_handler(current->domain, 20);
-			vpmu->bts_enable = 3;
-			return 1;
+        /* No PMC overflow but perhaps a Trace Message interrupt. */
+        msr_content = __vmread(GUEST_IA32_DEBUGCTL);
+        if ( !(msr_content & IA32_DEBUGCTLMSR_TR) ){
+			printk("<VT> BTS into end unpredictable\n");
+            return 0;
 		}
     }
 

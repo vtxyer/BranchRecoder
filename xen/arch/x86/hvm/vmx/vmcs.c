@@ -1255,12 +1255,12 @@ void vmx_do_resume(struct vcpu *v)
 
 	if(v->domain->cr3_monitor_flag == 1){
 		v->arch.debugreg[7] |= 0x2;
+		write_debugreg(0, v->arch.debugreg[0]);
+		write_debugreg(7, v->arch.debugreg[7]);
 	}
 	else if(v->domain->cr3_monitor_flag == 0){
 		v->arch.debugreg[7] = 0; 
 	}
-
-
 
 
 

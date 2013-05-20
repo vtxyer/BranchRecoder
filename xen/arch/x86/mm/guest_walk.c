@@ -399,49 +399,52 @@ set_ad:
 #if GUEST_PAGING_LEVELS >= 4 /* 64-bit only... */
 
 
-static unsigned long get_free_page_gaddr(struct domain *d, unsigned long cr3, unsigned long kernel_base)
-{
-	unsigned long last_gfn = d->tot_pages;
-	struct p2m_domain *p2m = p2m_get_hostp2m(d);
-	unsigned long target_gfn;
-	p2m_type_t p2mt;
-	int missing;
-	unsigned long va;
-	walk_t gw;
-	mfn_t top_mfn;
-	unsigned long top_gfn;
-	void *top_map;
-	uint32_t pfec[1];
-	struct page_info *top_page;
+//static unsigned long get_free_page_gaddr(struct domain *d, unsigned long cr3, unsigned long kernel_base)
+//{
+//	unsigned long last_gfn = d->tot_pages;
+//	struct p2m_domain *p2m = p2m_get_hostp2m(d);
+//	unsigned long target_gfn;
+//	p2m_type_t p2mt;
+//	int missing;
+//	unsigned long va;
+//	walk_t gw;
+//	mfn_t top_mfn;
+//	unsigned long top_gfn;
+//	void *top_map;
+//	uint32_t pfec[1];
+//	struct page_info *top_page;
+//
+//	/*2M page multiple*/
+//	target_gfn = last_gfn>>12;
+//	target_gfn <<= 12;
+//
+//	top_gfn = cr3 >> PAGE_SHIFT;
+//	top_page = get_page_from_gfn_p2m(d, p2m, top_gfn, &p2mt, NULL, P2M_ALLOC | P2M_UNSHARE);
+//	top_mfn = _mfn(page_to_mfn(top_page));
+//	top_map = map_domain_page(mfn_x(top_mfn));
+//
+//	
+////	target_gfn += 0x1000;
+//	do{
+//		target_gfn -= 0x1000;
+//		pfec[0] = 0;
+//		va = (target_gfn<<12);
+//		missing = guest_walk_tables(d->vcpu[0], p2m, va, &gw, pfec[0], top_mfn, top_map);
+//	
+//		/*!!!!!!!!!!!!!!!!!!!!!!!*/
+////		if(target_gfn < 0x30fff)
+////			break;
+//		missing = 0;			
+//
+//	}while(missing != 0);
+//
+//	va = target_gfn + 0xfff;
+//	va <<= 12;
+//	return  va;
+//}
 
-	/*2M page multiple*/
-	target_gfn = last_gfn>>12;
-	target_gfn <<= 12;
 
-	top_gfn = cr3 >> PAGE_SHIFT;
-	top_page = get_page_from_gfn_p2m(d, p2m, top_gfn, &p2mt, NULL, P2M_ALLOC | P2M_UNSHARE);
-	top_mfn = _mfn(page_to_mfn(top_page));
-	top_map = map_domain_page(mfn_x(top_mfn));
 
-	
-//	target_gfn += 0x1000;
-	do{
-		target_gfn -= 0x1000;
-		pfec[0] = 0;
-		va = (target_gfn<<12);
-		missing = guest_walk_tables(d->vcpu[0], p2m, va, &gw, pfec[0], top_mfn, top_map);
-	
-		/*!!!!!!!!!!!!!!!!!!!!!!!*/
-//		if(target_gfn < 0x30fff)
-//			break;
-		missing = 0;			
-
-	}while(missing != 0);
-
-	va = target_gfn + 0xfff;
-	va <<= 12;
-	return  va;
-}
 
 uint64_t
 set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
@@ -466,7 +469,7 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 	void *top_map;
 	unsigned long page_table_base_addr;
 	int i;
-	
+
 	
 	/*extra gfn must be multiple of 0x40000 !!!NEED to revise*/
 	v->domain->extra_gfn[0] = ((v->domain->max_pages) >> 16) + 4;
@@ -477,9 +480,10 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 
 
 	/*steal free pages from already mapping page and !!!???make that page without any ept privilige???*/
-	/*How to find free???*/
-	page_table_base_addr = get_free_page_gaddr(d, cr3, kernel_base);
+	page_table_base_addr = v->domain->extra_gfn_page_table << 12;
 	printk("<VT> page_table_base_addr:%lx\n", page_table_base_addr);
+	/*set EPT new entry for page table*/
+
 
 
 	top_gfn = cr3 >> PAGE_SHIFT;
@@ -491,7 +495,6 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 	}
 	top_mfn = _mfn(page_to_mfn(top_page));
 	top_map = map_domain_page(mfn_x(top_mfn));
-
 
     memset(gw, 0, sizeof(walk_t));
 	va = kernel_base + guest_physical_addr;
@@ -550,7 +553,8 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
 		goto out;
 	}
 	/*NEED to revise*/
-	flags = 0x1e3;						 
+	flags = 0x1e3;						
+
     /* Set the l2e */
 	for(i=0; i<512; i++){
 		entry_val = guest_physical_addr | flags; 

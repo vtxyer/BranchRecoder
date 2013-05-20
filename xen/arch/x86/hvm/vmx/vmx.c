@@ -2328,7 +2328,10 @@ void vmx_vmexit_handler(struct cpu_user_regs *regs)
 			printk("<VT> fault EXIT_REASON_MONITOR_TRAP_FLAG\n");
 			break;*/
 		case EXIT_REASON_CR_ACCESS:
-			printk("<VT> fault: EXIT_REASON_CR_ACCESS %lx debugctl[7]:%lx\n", v->arch.hvm_vcpu.guest_cr[3], v->arch.debugreg[7]);
+//			printk("<VT> fault: EXIT_REASON_CR_ACCESS %lx debugctl[7]:%lx debugreg[0]:%lx\n", v->arch.hvm_vcpu.guest_cr[3], v->arch.debugreg[7], v->arch.debugreg[0]);
+			break;
+		case EXIT_REASON_MONITOR_TRAP_FLAG:
+			printk("<VT> EXIT_REASON_MONITOR_TRAP_FLAG\n");
 			break;
 		}
 	}
@@ -3016,6 +3019,7 @@ int set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 	a = 3; //p2m_access_rw
 	p2m_guest = p2m_get_hostp2m(v->domain);
 	p2m_host = p2m_get_hostp2m(get_domain_by_id(vpmu->host_domID));
+
 	/*!!!!Need to revise*/
 	if(v->domain->extra_gfn[0] == 0 ){
 		printk("<VT>error bts extra_gfn not init\n");
@@ -3055,6 +3059,29 @@ int set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 
 	return 1;
 }
+int map_page_table_ept(struct domain *guest_d, struct domain *host_d, unsigned long host_cr3, unsigned long host_gva){
+	int ret;
+	struct p2m_domain *p2m;
+	unsigned long mfn;
+	struct vcpu *guest_v;
+
+	guest_v = guest_d->vcpu[0];
+	p2m = p2m_get_hostp2m(guest_d);
+	mfn = va_to_mfn(host_d->vcpu[0], host_cr3, host_gva);
+	printk("<VT> mfn: %lx\n", mfn);
+
+	/*NEED to revise +1*/
+	guest_v->domain->extra_gfn_page_table = ((guest_v->domain->max_pages) >> 16) + 1;
+
+	(guest_v->domain->extra_gfn_page_table) <<= 16;
+	/*create and set guest ept entry to point to host*/
+	ret = p2m->set_entry(p2m, (guest_v->domain->extra_gfn_page_table), mfn, PAGE_ORDER_4K, 0, 3);	
+	if(ret == 0){
+		printk("<VT> bts set_entry error\n");
+		return -1;
+	}
+	return 0;
+}
 
 
 int init_debug_store(struct vcpu *v, int host_domID, unsigned long cr3, unsigned long host_vpmu_data_addr)
@@ -3079,21 +3106,20 @@ int init_debug_store(struct vcpu *v, int host_domID, unsigned long cr3, unsigned
 	}
 
 	/*map host vpmu_data*/
-		vpmu_map = map_domain_page(mfn_x(host_mfn));
-		if(vpmu_map == NULL){
-			printk("<VT> Map vpmu_map error\n");
-			return -1;
-		}
-//		vpmu_map += (host_vpmu_data_addr & PAGE_SIZE);
-		host_vpmu_data = (struct host_vpmu_data *)vpmu_map;
+	vpmu_map = map_domain_page(mfn_x(host_mfn));
+	if(vpmu_map == NULL){
+		printk("<VT> Map vpmu_map error\n");
+		return -1;
+	}
+	host_vpmu_data = (struct host_vpmu_data *)vpmu_map;
 
-		if(host_vpmu_data->host_cr3 != cr3){
-			if(vpmu_map != NULL){
-				unmap_domain_page(vpmu_map);
-			}
-			printk("<VT> vpmu_data map error host_vpmu_data.cr3:%lx cr3:%lx\n", host_vpmu_data->host_cr3, cr3);
-			return -1;
+	if(host_vpmu_data->host_cr3 != cr3){
+		if(vpmu_map != NULL){
+			unmap_domain_page(vpmu_map);
 		}
+		printk("<VT> vpmu_data map error host_vpmu_data.cr3:%lx cr3:%lx\n", host_vpmu_data->host_cr3, cr3);
+		return -1;
+	}
 
 	/*set up vpmu related value*/
 	vpmu->host_domID = host_vpmu_data->host_domID;
@@ -3130,8 +3156,10 @@ int init_debug_store(struct vcpu *v, int host_domID, unsigned long cr3, unsigned
 		host_vpmu_data->host_domID, host_vpmu_data->host_ds_addr[0], host_vpmu_data->host_bts_base[0], host_vpmu_data->bts_size_order
 	);
 
-	/*Fill ds info*/
+
+
 	for(i=0; i<2; i++){
+		/*Fill ds info*/
 		ds_map = map_domain_page(mfn_x( (vpmu->host_ds_maddr[i]) ));
 		if(ds_map == NULL){
 			printk("<VT> Map error when Fill ds info\n");
@@ -3140,11 +3168,8 @@ int init_debug_store(struct vcpu *v, int host_domID, unsigned long cr3, unsigned
 			}
 			return -1;
 		}	
-
-//		ds_map += ((vpmu->host_ds_maddr[i]) & PAGE_SIZE);
 		ds = (struct debug_store *)ds_map;
-
-		/*check map success*/
+		/*check map success or not*/
 		if(ds->bts_buffer_base != 0x123){
 			printk("<VT> Map ds error %lx\n", ds->bts_buffer_base);
 			if(vpmu_map != NULL){
@@ -3154,42 +3179,24 @@ int init_debug_store(struct vcpu *v, int host_domID, unsigned long cr3, unsigned
 				unmap_domain_page(ds_map);
 			}
 		}
-
 		buffer_size = PAGE_SIZE*(vpmu->bts_size_order);
-        max = buffer_size / BTS_RECORD_SIZE;
-        thresh = max - 1;
+		max = buffer_size / BTS_RECORD_SIZE;
+		thresh = max;
 		ds->bts_buffer_base = vpmu->guest_bts_base_vaddr[i];
-        ds->bts_index = vpmu->guest_bts_base_vaddr[i];
-        ds->bts_absolute_maximum = ds->bts_buffer_base +
-            max * BTS_RECORD_SIZE;
-        ds->bts_interrupt_threshold = ds->bts_buffer_base +
-            thresh * BTS_RECORD_SIZE;                                                                                                                        
-	
+		ds->bts_index = vpmu->guest_bts_base_vaddr[i];
+		ds->bts_absolute_maximum = ds->bts_buffer_base +
+			max * BTS_RECORD_SIZE;
+		ds->bts_interrupt_threshold = ds->bts_buffer_base +
+			thresh * BTS_RECORD_SIZE;                                                                                                                        
+		vpmu->now_ptr = i;
+
 		printk("<VT> ds->bts_buffer_base:%lx ds->bts_interrupt_threshold:%lx\n", 
 				ds->bts_buffer_base, ds->bts_interrupt_threshold);
 		unmap_domain_page(ds_map);
 	}
 
-
 	vpmu->bts_enable = 1;
 	return 1;
-}
-void test_map(struct vcpu *v, unsigned long cr3, unsigned long gva){
-	mfn_t mfn;
-	void *vpmu_map;
-	struct host_vpmu_data *host_vpmu_data;
-
-	mfn = va_to_mfn(v, cr3, gva);
-	vpmu_map = map_domain_page(mfn_x(mfn));
-	if(vpmu_map == NULL){
-		printk("<VT> Map vpmu_map error\n");
-		return;
-	}
-	host_vpmu_data = (struct host_vpmu_data *)vpmu_map;
-
-	printk("<VT> gva:%lx  mfn:%lx  host_vpmu_data->host_cr3:%lx\n", gva, mfn, host_vpmu_data->host_cr3);
-
-	unmap_domain_page(vpmu_map);
 }
 
 
@@ -3200,7 +3207,7 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 	struct vcpu *v = NULL;	
 	walk_t gw;
 	struct vpmu_struct *vpmu;
-	int vcpu_num, i;
+	int vcpu_num, i, ret;
 
 	if(d == NULL){
 		printk("Wrong domain ID\n");
@@ -3251,7 +3258,11 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 				send_global_virq(20);
 			break;
 		case 5:
-			test_map(v, arg, arg2);
+			ret = map_page_table_ept(d, get_domain_by_id(arg), arg2, arg3);
+			if(ret == -1){
+				printk("<VT> EPT page table map error\n");
+				return -1;
+			}
 			break;
 		case 6:
 			/*Clean guest vpmu*/
@@ -3278,6 +3289,7 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 			break;
 		case 10:
 			/*Using Debug register to get cr3*/
+			printk("<VT> lstar: %lx\n", v->arch.hvm_vmx.msr_state.msrs[VMX_INDEX_MSR_LSTAR]);
 			if(arg == 0){
 				/*start*/
 				d->cr3_monitor_flag = 1;
