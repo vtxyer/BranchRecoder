@@ -558,9 +558,9 @@ set_guest_page_tables(struct vcpu *v, unsigned long cr3, walk_t *gw)
     /* Set the l2e */
 	for(i=0; i<512; i++){
 		entry_val = guest_physical_addr | flags; 
-//		printk("<VT> entry_val: %lx\n", entry_val);
 	    l2p[i].l2 = entry_val;		
-		guest_physical_addr += 0x1000000;
+		//guest_physical_addr += 0x1000000;
+		guest_physical_addr += 0x200000;
 	}
  
 

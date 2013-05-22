@@ -681,26 +681,28 @@ struct debug_store {
 	u64	pebs_event_reset[MAX_PEBS_EVENTS];
 };
 int switch_bts_buffer(struct vcpu *v, struct vpmu_struct *vpmu){
-	void *ds_map;
-	struct debug_store *ds;
-	unsigned int i;
+//	void *ds_map;
+//	struct debug_store *ds;
+//	unsigned int i;
 
-	for(i=0; i<2; i++){
-		ds_map = map_domain_page(mfn_x( (vpmu->host_ds_maddr[0]) ));
-		if(ds_map == NULL){
-			printk("<VT> Map error when Fill ds info\n");
-			return -1;
-		}	
-		ds = (struct debug_store *)ds_map;
-		if(ds->bts_index != ds->bts_interrupt_threshold){
-			vpmu->now_ptr = i;
-			break;
-		}
+	vpmu->now_ptr = ((vpmu->now_ptr)+1)%2;
 
-		if(i==1){
-			printk("<VT> not found available buffer to store !!!NEED to rewrite!!!\n");
-		}
-	}
+//	for(i=0; i<2; i++){
+//		ds_map = map_domain_page(mfn_x( (vpmu->host_ds_maddr[i]) ));
+//		if(ds_map == NULL){
+//			printk("<VT> Map error when Fill ds info\n");
+//			return -1;
+//		}	
+//		ds = (struct debug_store *)ds_map;
+//		if(ds->bts_index != ds->bts_interrupt_threshold){
+//			vpmu->now_ptr = i;
+//			break;
+//		}
+
+//		if(i==1){
+//			printk("<VT> not found available buffer to store !!!NEED to rewrite!!!\n");
+//		}
+//	}
 
 	return 0;
 }
@@ -709,7 +711,7 @@ int switch_bts_buffer(struct vcpu *v, struct vpmu_struct *vpmu){
 static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
 {
     struct vcpu *v = current, *tmpV;
-    u64 msr_content;
+    u64 msr_content, msr_content_bts;
     u32 vlapic_lvtpc;
     unsigned char int_vec;
     struct vpmu_struct *vpmu = vcpu_vpmu(v);
@@ -718,6 +720,7 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
 	int ret;
 
     rdmsrl(MSR_CORE_PERF_GLOBAL_STATUS, msr_content);
+    rdmsrl(MSR_IA32_DEBUGCTLMSR, msr_content_bts);
     if ( msr_content )
     {
         if ( is_pmc_quirk ){
@@ -730,8 +733,8 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
     else
     {
 		/*<VT>add*/
-		printk("<VT> BTS Interrupt Catched bts_enable:%u\n", vpmu->bts_enable);
 		ret = switch_bts_buffer(v, vpmu);
+		printk("<VT> BTS Interrupt Catched now_ptr:%u\n", vpmu->now_ptr);
 		if(ret == -1){
 			printk("<VT> catche BTS interrupt proceed error\n");
 			for_each_vcpu(v->domain, tmpV){
@@ -740,14 +743,18 @@ static int core2_vpmu_do_interrupt(struct cpu_user_regs *regs)
 			return 0;
 		}
 		vpmu->bts_enable = 2;
-		/*Sent VIRQ to Monitor Dom*/
-		set_global_virq_handler(v->domain, PMI_VIRQ);
+		wrmsrl(MSR_IA32_DEBUGCTLMSR, msr_content_bts);
+		/*Sent VIRQ to Monitor Dom !!!NEED to revise, sent to all domain now!!!*/
+		send_global_virq(PMI_VIRQ);
+		printk("<VT>sent VIRQ\n");
+    	apic_write_around(APIC_LVTPC, apic_read(APIC_LVTPC) & ~APIC_LVT_MASKED);
 		return 0;
+		/*End VT add*/
+
 
         /* No PMC overflow but perhaps a Trace Message interrupt. */
         msr_content = __vmread(GUEST_IA32_DEBUGCTL);
         if ( !(msr_content & IA32_DEBUGCTLMSR_TR) ){
-			printk("<VT> BTS into end unpredictable\n");
             return 0;
 		}
     }

@@ -1106,7 +1106,8 @@ int write_ds_msr(struct vcpu *v, int op)
 	vpmu = vcpu_vpmu(v);
 	
 	if(op == 1){	
-		msr_content = vpmu->guest_ds_vaddr[vpmu->now_ptr];
+		msr_content = vpmu->guest_ds_vaddr[ (vpmu->now_ptr) ];
+		printk("<VT> now_ptr: %u   guest_ds_vaddr:%lx\n", vpmu->now_ptr, vpmu->guest_ds_vaddr[vpmu->now_ptr]);
 	}
 	else if(op == 0){
 		msr_content = 0;		

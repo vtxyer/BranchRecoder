@@ -2976,7 +2976,8 @@ int set_ds_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 	for(i=0; i<2; i++){
 		guest_extra_gfn_base = (v->domain->extra_gfn_end[0]);
 		/*set ds guest address*/
-		vpmu->guest_ds_vaddr[i] = (guest_va_base | (guest_extra_gfn_base<<12) | (vpmu->host_ds_maddr[i] & PAGE_SIZE) );
+		vpmu->guest_ds_vaddr[i] = (guest_va_base | (guest_extra_gfn_base<<12) );
+		printk("guest_ds_vaddr[%d]:%lx  host_ds_maddr[%d]:%lx\n", i, vpmu->guest_ds_vaddr[i], i, vpmu->host_ds_maddr[i]);
 
 		/*Translate host virtual addr to physical address*/
 		host_ds_mfn = vpmu->host_ds_maddr[i];
@@ -3001,7 +3002,7 @@ int set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 {
 	struct p2m_domain *p2m_host, *p2m_guest;
 	unsigned long host_bts_base_mfn = 0;
-	unsigned long guest_extra_gfn_base;
+	unsigned long guest_extra_gfn_base = 0;
 	//uint32_t pfec = PFEC_page_present;
 	struct vcpu *host_vcpu;
 	p2m_access_t a;
@@ -3047,15 +3048,15 @@ int set_bts_guest_map(struct vcpu *v, struct vpmu_struct *vpmu)
 				printk("<VT> bts set_entry error\n");
 				return -1;
 			}
-			(v->domain->extra_gfn_end[0])++;
 
+			(v->domain->extra_gfn_end[0])++;
 			host_bts_base += 4096;
 		}
 	}
 
 
-	//printk("<VT> set bts ok host_bts_addr:%lx host_mfn:%lx guest_bts_addr:%lx\n", 
-	//			vpmu->host_bts_base_vaddr[0], host_bts_base_mfn, vpmu->guest_bts_base_vaddr[0]);
+	printk("<VT> set bts ok!!  host_mfn:%lx guest_bts_addr:%lx\n", 
+			host_bts_base_mfn, guest_extra_gfn_base);
 
 	return 1;
 }
@@ -3250,7 +3251,7 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 			}
 			break;
 		case 4:
-			/*test event channel*/
+			/*set event channel*/
 			if(arg == 0){
 				set_global_virq_handler(d, 20);
 			}
@@ -3258,6 +3259,7 @@ unsigned long do_vt_op(int op, int domID, unsigned long arg, unsigned long arg2,
 				send_global_virq(20);
 			break;
 		case 5:
+			/*map page table's ept*/
 			ret = map_page_table_ept(d, get_domain_by_id(arg), arg2, arg3);
 			if(ret == -1){
 				printk("<VT> EPT page table map error\n");
