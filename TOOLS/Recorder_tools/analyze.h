@@ -121,10 +121,10 @@ extern "C"
 		};  
 		ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);		
 	}
-	void start_monitoring(int fd, int _guest_domID){
+	void start_monitoring(int fd, int _guest_domID, int op, unsigned long target_cr3){
 		privcmd_hypercall_t hyper1 = { 
 			__HYPERVISOR_vt_op, 
-			{ 2, _guest_domID, 0, 0, 0}
+			{ 2, _guest_domID, op, target_cr3, 0}
 		};  
 		ioctl(fd, IOCTL_PRIVCMD_HYPERCALL, &hyper1);		
 	}
